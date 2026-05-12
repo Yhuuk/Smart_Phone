@@ -11,7 +11,7 @@
 #define TFT_MOSI 23
 #define TFT_SCLK 18
 #define TFT_CS   5
-#define TFT_DC   22      //2和16，22
+#define TFT_DC   16      //2和16，22
 
 // RST：如果你的屏幕RST脚没接（绑到3.3V或ESP32复位），就用 -1
 #define TFT_RST  32   //32

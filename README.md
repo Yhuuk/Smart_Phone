@@ -9,3 +9,11 @@
 | `.gitignore`     |     必须上传 | 告诉 Git 忽略哪些文件        |
 | `.vscode/`       | 部分上传或不上传 | 看是否包含个人配置            |
 | `.pio/`          |      不上传 | 编译缓存和依赖缓存            |
+
+## 代码结构说明
+1. 第一版上传到`GitHub`上的代码中是没有`lv_conf.h`的，在华为电脑中`lv_conf.h`是自己手动添加到`.pio\libdeps\esp32dev\lvgl` 中的。
+2. `tft_setup.h` 是一个稳定入口,它能帮我直接链接到自建的`include/User_Setup.h`，并且生效。解决了第一版中会跑去用库里的默认 `User_Setup.h`
+3. lv_conf.h也是放在了自建的`include/lv_conf.h` 中，并且生效
+
+## 不同开发板的引脚说明
+- 1号板子的DC引脚是P22，2号板子的DC引脚是P16
