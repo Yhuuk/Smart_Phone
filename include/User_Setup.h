@@ -7,11 +7,12 @@
 // #define USE_VSPI_PORT   // ESP32 默认 VSPI，取消注释可用 HSPI :contentReference[oaicite:5]{index=5}
 
 // 3) 定义 SPI 引脚（按你实际接线修改）
+//1号板子的DC是P16,2号板子的引脚是P22
 #define TFT_MISO 19
 #define TFT_MOSI 23
 #define TFT_SCLK 18
 #define TFT_CS   5
-#define TFT_DC   16      //2和16，22
+#define TFT_DC   22      //2和16，22
 
 // RST：如果你的屏幕RST脚没接（绑到3.3V或ESP32复位），就用 -1
 #define TFT_RST  32   //32

@@ -11,10 +11,14 @@
  * ***** */
 
 // inline constexpr const char *WIFI_SSID = "E-FALCON";
-
+/*公网MQTT */
 static const char *WIFI_SSID = "北离";          //没有static这个修饰会报错，这个是放在头文件.h中，如果还有其它.cpp文件包含了
 static const char *WIFI_PASS = "@Ww520527";     //WIFI_MQTT.h文件的话，就每一个.cpp都会有一个WIFI_SSID的定义，这样就会被再重复定义而报错
-static const char *MQTT_HOST = "192.168.28.63";  //北离
+static const char *MQTT_HOST = "broker.emqx.io";  //北离
+
+// static const char *WIFI_SSID = "北离";          //没有static这个修饰会报错，这个是放在头文件.h中，如果还有其它.cpp文件包含了
+// static const char *WIFI_PASS = "@Ww520527";     //WIFI_MQTT.h文件的话，就每一个.cpp都会有一个WIFI_SSID的定义，这样就会被再重复定义而报错
+// static const char *MQTT_HOST = "192.168.28.63";  //北离
 
 // static const char *WIFI_SSID = "E-FALCON";   //创建一个指针变量，指向字符串字面量"E-FALCON"，它是只读，不应该被修改
 // static const char *WIFI_PASS = "zhongsun666.";
@@ -22,8 +26,16 @@ static const char *MQTT_HOST = "192.168.28.63";  //北离
 
 static const uint16_t MQTT_PORT = 1883;
 
-static const char *TOPIC_TX = "oubeili/esp32demo/tx";
-static const char *TOPIC_RX = "oubeili/esp32demo/rx";
+// static const char *TOPIC_TX = "oubeili/esp32demo/tx";
+// static const char *TOPIC_RX = "oubeili/esp32demo/rx";
+
+//2号板子
+static const char *TOPIC_TX = "oubeili/esp32phone/hangzhou_to_beijing";
+static const char *TOPIC_RX = "oubeili/esp32phone/beijing_to_hangzhou";
+
+// // 1号板子
+// static const char *TOPIC_TX = "oubeili/esp32phone/beijing_to_hangzhou";
+// static const char *TOPIC_RX = "oubeili/esp32phone/hangzhou_to_beijing";
 
 class WifiMqttManager {
 public:

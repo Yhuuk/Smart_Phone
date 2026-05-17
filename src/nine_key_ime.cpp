@@ -1848,7 +1848,7 @@ static String buildPreview(const String* list,
                            uint8_t maxShow,
                            bool active)
 {
-    if (count == 0) return "无";
+    if (count == 0) return "";
     if (maxShow == 0) return "";
 
     String s;
