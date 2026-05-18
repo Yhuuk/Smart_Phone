@@ -5,3 +5,6 @@
 .vscode/ipch
 
 .vscode
+
+# 这个18号字体用不着，所以就不往GitHub上推了
+ui_font_HanSans_cn_18.c

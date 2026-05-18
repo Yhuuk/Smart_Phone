@@ -117,12 +117,60 @@ static void sendCurrentText()
     refreshImeUi();
 }
 
+static void processImeKey(char k)
+{
+    ime.onKey(k);
+    refreshImeUi();
+
+    if (ime.takeSendFlag()) {
+        sendCurrentText();
+    }
+
+    if (ime.takeBackFlag()) {
+        // 杩欓噷鍏堜笉鍋氶〉闈㈣繑鍥烇紝閬垮厤璇垹鍔熻兘銆?
+        // 浠ュ悗浣犺鍋氣€滆繑鍥炰笂涓€椤碘€濓紝灏卞湪杩欓噷鎺ラ〉闈㈠垏鎹㈤€昏緫銆?
+        Serial.println("[IME] back flag");
+    }
+}
+
 static void handleKeypad()
 {
-    char k;
-    while (keypad.getKey(k)) {
+    static bool pendingAbKey = false;
+    static char pendingAbChar = 0;
+    static bool pendingAbScrolled = false;
+
+    KeyEvent event;
+    while (keypad.poll(event)) {
+        char k = event.key;
+
+        if (event.type == KeyEventType::Released) {
+            if ((k == 'A' || k == 'B') && pendingAbKey && pendingAbChar == k) {
+                if (!pendingAbScrolled) {
+                    processImeKey(k);
+                }
+
+                pendingAbKey = false;
+                pendingAbChar = 0;
+                pendingAbScrolled = false;
+            }
+            continue;
+        }
+
         Serial.print("[KEY] ");
         Serial.println(k);
+
+        if (event.type == KeyEventType::Pressed && (k == 'A' || k == 'B')) {
+            pendingAbKey = true;
+            pendingAbChar = k;
+            pendingAbScrolled = false;
+            continue;
+        }
+
+        if (event.type == KeyEventType::Repeat && (k == 'A' || k == 'B')) {
+            pendingAbScrolled = true;
+            ui_chat_scrollMessages(k == 'A' ? -1 : 1);
+            continue;
+        }
 
         ime.onKey(k);
         refreshImeUi();
@@ -161,6 +209,8 @@ void setup()
 
     keypad.begin(25);
     keypad.enableRepeat('*', 500, 80);
+    keypad.enableRepeat('A', 500, 220);
+    keypad.enableRepeat('B', 500, 220);
 
     ime.begin();
     refreshImeUi();

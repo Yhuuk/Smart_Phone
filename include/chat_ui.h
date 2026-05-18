@@ -16,3 +16,4 @@ const char *ui_chat_getInputText();
 
 void ui_chat_addMessage(const char *text, bool mine);
 void ui_chat_clearMessages();
+void ui_chat_scrollMessages(int8_t direction);

@@ -49,10 +49,11 @@ static lv_obj_t *g_pinyinLabel = nullptr;
 static lv_obj_t *g_hanziLabel = nullptr;
 static lv_obj_t *g_inputTa = nullptr;
 
-static constexpr uint8_t CHAT_MAX = 5;
+static constexpr uint8_t CHAT_MAX = 20;
 static String g_msgText[CHAT_MAX];
 static bool   g_msgMine[CHAT_MAX] = {false};
 static uint8_t g_msgCount = 0;
+static uint8_t g_viewStart = 0;
 
 // =====================
 // 基础工具
@@ -306,6 +307,39 @@ static void drawOneMessage(uint8_t idx, int16_t y)
     }
 }
 
+static uint8_t latestViewStart()
+{
+    const int16_t PANEL_H = 209;
+    const int16_t TOP_PAD = 7;
+    const int16_t GAP = 7;
+
+    uint8_t start = 0;
+    int16_t totalH = 0;
+
+    for (int8_t i = (int8_t)g_msgCount - 1; i >= 0; i--) {
+        int16_t h = bubbleHeightForText(g_msgText[i].c_str());
+        int16_t add = h + ((totalH == 0) ? 0 : GAP);
+
+        if (totalH + add <= PANEL_H - TOP_PAD * 2) {
+            totalH += add;
+            start = i;
+        } else {
+            break;
+        }
+    }
+
+    return start;
+}
+
+static uint8_t clampedViewStart(uint8_t start)
+{
+    if (g_msgCount == 0) return 0;
+
+    uint8_t latestStart = latestViewStart();
+    if (start > latestStart) return latestStart;
+    return start;
+}
+
 static void redrawChatMessages()
 {
     if (!g_chatPanel) return;
@@ -332,10 +366,18 @@ static void redrawChatMessages()
         }
     }
 
+    g_viewStart = clampedViewStart(g_viewStart);
+    start = (int8_t)g_viewStart;
+
     int16_t y = TOP_PAD;
     for (uint8_t i = start; i < g_msgCount; i++) {
+        int16_t h = bubbleHeightForText(g_msgText[i].c_str());
+        if (y > TOP_PAD && y + h > PANEL_H - TOP_PAD) {
+            break;
+        }
+
         drawOneMessage(i, y);
-        y += bubbleHeightForText(g_msgText[i].c_str()) + GAP;
+        y += h + GAP;
     }
 }
 
@@ -439,6 +481,7 @@ void ui_chat_create()
     lv_obj_clear_flag(g_root, LV_OBJ_FLAG_SCROLLABLE);
 
     g_msgCount = 0;
+    g_viewStart = 0;
     for (uint8_t i = 0; i < CHAT_MAX; i++) {
         g_msgText[i] = "";
         g_msgMine[i] = false;
@@ -556,15 +599,32 @@ void ui_chat_addMessage(const char *text, bool mine)
         g_msgMine[CHAT_MAX - 1] = mine;
     }
 
+    g_viewStart = latestViewStart();
     redrawChatMessages();
 }
 
 void ui_chat_clearMessages()
 {
     g_msgCount = 0;
+    g_viewStart = 0;
     for (uint8_t i = 0; i < CHAT_MAX; i++) {
         g_msgText[i] = "";
         g_msgMine[i] = false;
     }
+    redrawChatMessages();
+}
+
+void ui_chat_scrollMessages(int8_t direction)
+{
+    if (g_msgCount == 0 || direction == 0) return;
+
+    uint8_t latestStart = latestViewStart();
+
+    if (direction < 0) {
+        if (g_viewStart > 0) g_viewStart--;
+    } else {
+        if (g_viewStart < latestStart) g_viewStart++;
+    }
+
     redrawChatMessages();
 }

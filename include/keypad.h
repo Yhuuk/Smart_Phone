@@ -51,6 +51,7 @@ public:
 private:
   void scanOnce(uint32_t now);
   void pushEvent(char k, KeyEventType t, uint32_t now);
+  int8_t repeatConfigIndex(char k) const;
 
   inline void allRowsHigh();
   inline void driveOneRowLow(int r);
@@ -67,12 +68,13 @@ private:
   uint32_t _lastChange[4][4] = {{0}};
 
   // repeat
-  bool     _repeatEnabled = false;
-  char     _repeatKey = '*';
-  uint32_t _repeatFirstDelay = 500;
-  uint32_t _repeatInterval   = 80;
-  uint32_t _pressedAt[4][4]  = {{0}};
-  uint32_t _lastRepeatAt[4][4]= {{0}};
+  static constexpr uint8_t REPEAT_KEY_MAX = 4;
+  uint8_t  _repeatKeyCount = 0;
+  char     _repeatKeys[REPEAT_KEY_MAX] = {0};
+  uint32_t _repeatFirstDelay[REPEAT_KEY_MAX] = {0};
+  uint32_t _repeatInterval[REPEAT_KEY_MAX] = {0};
+  uint32_t _pressedAt[4][4] = {{0}};
+  uint32_t _lastRepeatAt[4][4] = {{0}};
 
   // 简单事件队列（环形缓冲）
   static constexpr uint8_t QSIZE = 16;

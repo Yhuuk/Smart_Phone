@@ -63,10 +63,22 @@ void MatrixKeypad4x4_CR::begin(uint32_t debounceMs) {
 void MatrixKeypad4x4_CR::enableRepeat(char repeatKey,
                                       uint32_t firstDelayMs,
                                       uint32_t intervalMs) {
-  _repeatEnabled = true;
-  _repeatKey = repeatKey;
-  _repeatFirstDelay = firstDelayMs;
-  _repeatInterval = intervalMs;
+  int8_t idx = repeatConfigIndex(repeatKey);
+  if (idx < 0) {
+    if (_repeatKeyCount >= REPEAT_KEY_MAX) return;
+    idx = _repeatKeyCount++;
+    _repeatKeys[idx] = repeatKey;
+  }
+
+  _repeatFirstDelay[idx] = firstDelayMs;
+  _repeatInterval[idx] = intervalMs;
+}
+
+int8_t MatrixKeypad4x4_CR::repeatConfigIndex(char k) const {
+  for (uint8_t i = 0; i < _repeatKeyCount; i++) {
+    if (_repeatKeys[i] == k) return (int8_t)i;
+  }
+  return -1;
 }
 
 inline void MatrixKeypad4x4_CR::allRowsHigh() {
@@ -143,11 +155,12 @@ void MatrixKeypad4x4_CR::scanOnce(uint32_t now) {
       }
 
       // 长按连发（适合 '*' 退格）
-      if (_repeatEnabled && _stable[r][c]) {
+      if (_stable[r][c]) {
         char k = _map[r][c];
-        if (k == _repeatKey) {
-          if ((now - _pressedAt[r][c]) >= _repeatFirstDelay &&
-              (now - _lastRepeatAt[r][c]) >= _repeatInterval) {
+        int8_t repeatIdx = repeatConfigIndex(k);
+        if (repeatIdx >= 0) {
+          if ((now - _pressedAt[r][c]) >= _repeatFirstDelay[repeatIdx] &&
+              (now - _lastRepeatAt[r][c]) >= _repeatInterval[repeatIdx]) {
             _lastRepeatAt[r][c] = now;
             pushEvent(k, KeyEventType::Repeat, now);
           }
