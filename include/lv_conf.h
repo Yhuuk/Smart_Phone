@@ -1,26 +1,26 @@
 #ifndef LV_CONF_H
 #define LV_CONF_H
 
-#include <stdint.h>   //¸ÉÂïµÄ£¿
+#include <stdint.h>   //å¹²å˜›çš„ï¼Ÿ
 
 #define LV_COLOR_DEPTH      16   //rgb565
 #define LV_MEM_SIZE         (48U * 1024U)
-#define LV_USE_OS           0    //ÕâÊÇÊ²Ã´£¬²»¶®ÒâË¼
+#define LV_USE_OS           0    //è¿™æ˜¯ä»€ä¹ˆï¼Œä¸æ‡‚æ„æ€
 
 
-#define LV_HOR_RES_MAX      320  //Ë®Æ½·Ö±æÂÊ
-#define LV_VER_RES_MAX      240 //´¹Ö±·Ö±æÂÊifn
+#define LV_HOR_RES_MAX      320  //æ°´å¹³åˆ†è¾¨ç‡
+#define LV_VER_RES_MAX      240 //å‚ç›´åˆ†è¾¨ç‡ifn
 
 
-#define LV_USE_LOG          0 //¹Ø±Õ
+#define LV_USE_LOG          0 //å…³é—­
 
 #define LV_FONT_MONTSERRAT_14   1
 #define LV_FONT_MONTSERRAT_16   1
 #define LV_FONT_MONTSERRAT_24   1
 #define LV_FONT_MONTSERRAT_48   1
-#define LV_FONT_DEFAULT         &lv_font_montserrat_24  //lv_font_montserrat_14±ØĞëÊÇĞ¡Ğ´
+#define LV_FONT_DEFAULT         &lv_font_montserrat_24  //lv_font_montserrat_14å¿…é¡»æ˜¯å°å†™
 
 #define LV_USE_LABEL            1
-#define LV_USE_BTN              1   //ÕâÊÇÊ²Ã´£¬²»ÊÇºÜ¶®
+#define LV_USE_BTN              1   //è¿™æ˜¯ä»€ä¹ˆï¼Œä¸æ˜¯å¾ˆæ‡‚
 
 #endif

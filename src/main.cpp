@@ -141,8 +141,8 @@ static void processImeKey(char k)
     }
 
     if (ime.takeBackFlag()) {
-        // 杩欓噷鍏堜笉鍋氶〉闈㈣繑鍥烇紝閬垮厤璇垹鍔熻兘銆?
-        // 浠ュ悗浣犺鍋氣€滆繑鍥炰笂涓€椤碘€濓紝灏卞湪杩欓噷鎺ラ〉闈㈠垏鎹㈤€昏緫銆?
+        // 这里先不做页面返回，避免误删功能。
+        // 以后你要做“返回上一页”，就在这里接页面切换逻辑。
         Serial.println("[IME] back flag");
     }
 }
