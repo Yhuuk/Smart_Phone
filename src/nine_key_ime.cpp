@@ -1848,6 +1848,8 @@ static String buildPreview(const String* list,
                            uint8_t maxShow,
                            bool active)
 {
+    (void)active;
+
     if (count == 0) return "";
     if (maxShow == 0) return "";
 
@@ -1861,13 +1863,9 @@ static String buildPreview(const String* list,
     for (uint8_t i = start; i < end; i++) {
         if (i > start) s += " ";
 
-        if (i == sel) {
-            s += active ? "[" : "(";
-            s += list[i];
-            s += active ? "]" : ")";
-        } else {
-            s += list[i];
-        }
+        // 选中状态现在由 chat_ui.cpp 中的 LVGL 背景色高亮显示，
+        // 这里不要再用 [] 或 () 包裹候选文字。
+        s += list[i];
     }
 
     return s;

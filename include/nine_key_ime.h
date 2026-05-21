@@ -56,6 +56,9 @@ public:
     // 返回当前模式名称，给界面显示用
     String modeName() const;
 
+    // 返回当前模式本身，给界面判断候选区显示方式用
+    InputMode mode() const { return _mode; }
+
     // 返回当前选中的候选字/词
     String currentCandidate() const;
 
@@ -66,6 +69,15 @@ public:
     // 新增：拼音候选预览、汉字候选预览
     String pyCandidatesPreview(uint8_t maxShow = 4) const;
     String hzCandidatesPreview(uint8_t maxShow = 6) const;
+
+    // 给 LVGL 候选区逐项渲染使用：只读访问候选数组和当前选中索引
+    const String* pyCandidates() const { return _candPy; }
+    uint8_t pyCandidateCount() const { return _pyCount; }
+    uint8_t pySelectedIndex() const { return _pySel; }
+
+    const String* hzCandidates() const { return _candText; }
+    uint8_t hzCandidateCount() const { return _hzCount; }
+    uint8_t hzSelectedIndex() const { return _hzSel; }
 
     // 当前是否在拼音候选行
     bool selectingPinyin() const { return _cnStage == CN_STAGE_PY; }

@@ -19,30 +19,44 @@ static uint32_t lastStatusUiMs = 0;
 
 static void refreshImeUi()
 {
-    String mode = ime.modeName();
-    ui_chat_setMode(mode.c_str());
+    InputMode mode = ime.mode();
+    String modeName = ime.modeName();
+    ui_chat_setMode(modeName.c_str());
 
     ui_chat_setInputText(ime.text().c_str());
+    ui_chat_setIme("", "");
 
-    String py;
-    String hz;
-
-    if (mode == "中文") {
-        py = ime.pyCandidatesPreview(4);
-        hz = ime.hzCandidatesPreview(6);
-
-        // 有些编码阶段还没有候选时，至少把数字串显示出来，方便判断按键是否进来了。
-        if (py.length() == 0 && ime.digits().length() > 0) {
-            py = ime.digits();
+    if (mode == INPUT_CN) {
+        if (ime.pyCandidateCount() > 0) {
+            ui_chat_setImeCandidates(IME_ROW_TOP,
+                                      ime.pyCandidates(),
+                                      ime.pyCandidateCount(),
+                                      ime.pySelectedIndex(),
+                                      4,
+                                      IME_COLOR_PINYIN);
+        } else if (ime.digits().length() > 0) {
+            // 有些编码阶段还没有候选时，至少把数字串显示出来，方便判断按键是否进来了。
+            ui_chat_setImeRowText(IME_ROW_TOP, ime.digits().c_str());
         }
-    } else {
-        // 英文 / 数字模式下，不在上面的拼音候选区显示 en/num。
-        // 顶部状态栏已经显示 cn / en / num，这里保持两层输入法候选区为空，避免界面重影和信息重复。
-        py = ime.hzCandidatesPreview(8);;
-        hz = "";
-    }
 
-    ui_chat_setIme(py.c_str(), hz.c_str());
+        if (ime.hzCandidateCount() > 0) {
+            ui_chat_setImeCandidates(IME_ROW_BOTTOM,
+                                      ime.hzCandidates(),
+                                      ime.hzCandidateCount(),
+                                      ime.hzSelectedIndex(),
+                                      6,
+                                      IME_COLOR_HANZI);
+        }
+    } else if (mode == INPUT_EN) {
+        if (ime.hzCandidateCount() > 0) {
+            ui_chat_setImeCandidates(IME_ROW_TOP,
+                                      ime.hzCandidates(),
+                                      ime.hzCandidateCount(),
+                                      ime.hzSelectedIndex(),
+                                      8,
+                                      IME_COLOR_EN_NUM);
+        }
+    }
 }
 
 static void onWifiState(bool connected)

@@ -27,6 +27,13 @@ static const uint32_t C_ROW_BG        = 0x51DAB6;
 static const uint32_t C_BOTTOM_BG     = 0x66C2C5;
 static const uint32_t C_SEND_BTN      = 0x1EDFEB;
 
+// 候选区选中颜色集中在这里。
+// 如果想修改候选区选中颜色，改这里即可。
+static const uint32_t C_IME_PINYIN_SEL_BG = 0x1D4ED8;  // 这里是拼音选中背景色
+static const uint32_t C_IME_HANZI_SEL_BG  = 0xF97316;  // 这里是汉字选中背景色
+static const uint32_t C_IME_EN_NUM_SEL_BG = 0x7C3AED;  // 这里是英文/数字选中背景色
+static const uint32_t C_IME_SEL_TEXT      = 0xFFFFFF;  // 这里是选中候选文字颜色
+
 static const uint32_t C_WHITE         = 0xFFFFFF;
 static const uint32_t C_GREEN         = 0x22F05A;
 static const uint32_t C_GRAY          = 0x808080;
@@ -45,9 +52,17 @@ static lv_obj_t *g_batteryFill = nullptr;
 
 static lv_obj_t *g_mqttParts[5] = {nullptr, nullptr, nullptr, nullptr, nullptr};
 
+static lv_obj_t *g_pinyinRow = nullptr;
+static lv_obj_t *g_hanziRow = nullptr;
 static lv_obj_t *g_pinyinLabel = nullptr;
 static lv_obj_t *g_hanziLabel = nullptr;
 static lv_obj_t *g_inputTa = nullptr;
+
+static constexpr uint8_t IME_MAX_ROW_ITEMS = 8;
+static lv_obj_t *g_pinyinCandBox[IME_MAX_ROW_ITEMS] = {nullptr};
+static lv_obj_t *g_pinyinCandLabel[IME_MAX_ROW_ITEMS] = {nullptr};
+static lv_obj_t *g_hanziCandBox[IME_MAX_ROW_ITEMS] = {nullptr};
+static lv_obj_t *g_hanziCandLabel[IME_MAX_ROW_ITEMS] = {nullptr};
 
 static constexpr uint8_t CHAT_MAX = 20;
 static String g_msgText[CHAT_MAX];
@@ -164,6 +179,84 @@ static lv_obj_t *centerLabel(lv_obj_t *parent,
 
     lv_obj_center(obj);
     return obj;
+}
+
+static uint32_t imeSelectedBgColor(ImeCandidateColorRole role)
+{
+    switch (role) {
+        case IME_COLOR_PINYIN: return C_IME_PINYIN_SEL_BG;
+        case IME_COLOR_HANZI:  return C_IME_HANZI_SEL_BG;
+        case IME_COLOR_EN_NUM: return C_IME_EN_NUM_SEL_BG;
+        default:               return C_IME_EN_NUM_SEL_BG;
+    }
+}
+
+static uint8_t imeUtf8CharBytes(uint8_t firstByte)
+{
+    if ((firstByte & 0x80) == 0x00) return 1;
+    if ((firstByte & 0xE0) == 0xC0) return 2;
+    if ((firstByte & 0xF0) == 0xE0) return 3;
+    if ((firstByte & 0xF8) == 0xF0) return 4;
+    return 1;
+}
+
+static int16_t imeCandidateTextWidth(const String& text)
+{
+    int16_t w = 10;
+    const char *p = text.c_str();
+
+    while (*p) {
+        uint8_t b = (uint8_t)*p;
+        if ((b & 0x80) == 0x00) {
+            w += 8;
+            p++;
+        } else {
+            w += 16;
+            p += imeUtf8CharBytes(b);
+        }
+    }
+
+    if (w < 20) w = 20;
+    return w;
+}
+
+static void hideImeCandidateSlots(lv_obj_t **boxes)
+{
+    for (uint8_t i = 0; i < IME_MAX_ROW_ITEMS; i++) {
+        if (boxes[i]) {
+            lv_obj_add_flag(boxes[i], LV_OBJ_FLAG_HIDDEN);
+        }
+    }
+}
+
+static void createImeCandidateSlots(lv_obj_t *parent,
+                                    lv_obj_t **boxes,
+                                    lv_obj_t **labels)
+{
+    for (uint8_t i = 0; i < IME_MAX_ROW_ITEMS; i++) {
+        boxes[i] = box(parent, 0, 0, 20, 17, C_ROW_BG, 3);
+        lv_obj_set_style_bg_opa(boxes[i], LV_OPA_TRANSP, LV_PART_MAIN);
+
+        labels[i] = label(boxes[i], "", 3, 0, 14, 17,
+                          FONT_CN, C_TEXT, LV_TEXT_ALIGN_CENTER);
+
+        lv_obj_add_flag(boxes[i], LV_OBJ_FLAG_HIDDEN);
+    }
+}
+
+static lv_obj_t *imePlainLabelForRow(ImeCandidateRow row)
+{
+    return (row == IME_ROW_BOTTOM) ? g_hanziLabel : g_pinyinLabel;
+}
+
+static lv_obj_t **imeCandidateBoxesForRow(ImeCandidateRow row)
+{
+    return (row == IME_ROW_BOTTOM) ? g_hanziCandBox : g_pinyinCandBox;
+}
+
+static lv_obj_t **imeCandidateLabelsForRow(ImeCandidateRow row)
+{
+    return (row == IME_ROW_BOTTOM) ? g_hanziCandLabel : g_pinyinCandLabel;
 }
 
 static lv_obj_t *circleText(lv_obj_t *parent,
@@ -416,17 +509,19 @@ static void createChatArea()
 static void createImeArea()
 {
     // 拼音区：250 ~ 266
-    box(g_root, 0, 250, 240, 17, C_ROW_BG, 2);
-    g_pinyinLabel = label(g_root, "", 20, 250, 210, 17,
+    g_pinyinRow = box(g_root, 0, 250, 240, 17, C_ROW_BG, 2);
+    g_pinyinLabel = label(g_pinyinRow, "", 20, 0, 210, 17,
                           FONT_CN, C_TEXT, LV_TEXT_ALIGN_LEFT);
+    createImeCandidateSlots(g_pinyinRow, g_pinyinCandBox, g_pinyinCandLabel);
 
     // 分隔线：267 ~ 268
     box(g_root, 0, 267, 240, 2, C_SCREEN_BG, 0);
 
     // 汉字候选区：269 ~ 285
-    box(g_root, 0, 269, 240, 17, C_ROW_BG, 2);
-    g_hanziLabel = label(g_root, "", 20, 269, 210, 17,
+    g_hanziRow = box(g_root, 0, 269, 240, 17, C_ROW_BG, 2);
+    g_hanziLabel = label(g_hanziRow, "", 20, 0, 210, 17,
                          FONT_CN, C_TEXT, LV_TEXT_ALIGN_LEFT);
+    createImeCandidateSlots(g_hanziRow, g_hanziCandBox, g_hanziCandLabel);
 }
 
 static void createBottomBar()
@@ -561,12 +656,90 @@ void ui_chat_setBattery(uint8_t percent)
 
 void ui_chat_setIme(const char *pinyin, const char *hanzi)
 {
-    if (g_pinyinLabel) {
-        lv_label_set_text(g_pinyinLabel, pinyin ? pinyin : "");
+    ui_chat_setImeRowText(IME_ROW_TOP, pinyin);
+    ui_chat_setImeRowText(IME_ROW_BOTTOM, hanzi);
+}
+
+void ui_chat_setImeRowText(ImeCandidateRow row, const char *text)
+{
+    lv_obj_t *plain = imePlainLabelForRow(row);
+    lv_obj_t **boxes = imeCandidateBoxesForRow(row);
+
+    hideImeCandidateSlots(boxes);
+
+    if (plain) {
+        lv_obj_clear_flag(plain, LV_OBJ_FLAG_HIDDEN);
+        lv_label_set_text(plain, text ? text : "");
+    }
+}
+
+void ui_chat_setImeCandidates(ImeCandidateRow row,
+                              const String *items,
+                              uint8_t count,
+                              uint8_t selected,
+                              uint8_t maxShow,
+                              ImeCandidateColorRole colorRole)
+{
+    if (items == nullptr || count == 0 || maxShow == 0) {
+        ui_chat_setImeRowText(row, "");
+        return;
     }
 
-    if (g_hanziLabel) {
-        lv_label_set_text(g_hanziLabel, hanzi ? hanzi : "");
+    lv_obj_t *plain = imePlainLabelForRow(row);
+    lv_obj_t **boxes = imeCandidateBoxesForRow(row);
+    lv_obj_t **labels = imeCandidateLabelsForRow(row);
+
+    if (plain) {
+        lv_obj_add_flag(plain, LV_OBJ_FLAG_HIDDEN);
+    }
+    hideImeCandidateSlots(boxes);
+
+    if (selected >= count) selected = 0;
+    if (maxShow > IME_MAX_ROW_ITEMS) maxShow = IME_MAX_ROW_ITEMS;
+
+    uint8_t page = selected / maxShow;
+    uint8_t start = page * maxShow;
+    uint8_t end = start + maxShow;
+    if (end > count) end = count;
+
+    uint8_t visibleCount = end - start;
+    if (visibleCount == 0) return;
+
+    const int16_t rowX = 20;
+    const int16_t rowW = 210;
+    const int16_t gap = 4;
+    const int16_t rowH = 17;
+    int16_t maxSlotW = (rowW - (gap * (visibleCount - 1))) / visibleCount;
+    if (maxSlotW < 20) maxSlotW = 20;
+
+    int16_t x = rowX;
+    uint32_t selectedBg = imeSelectedBgColor(colorRole);
+
+    for (uint8_t slot = 0; slot < visibleCount; slot++) {
+        uint8_t itemIndex = start + slot;
+        bool isSelected = (itemIndex == selected);
+
+        int16_t w = imeCandidateTextWidth(items[itemIndex]);
+        if (w > maxSlotW) w = maxSlotW;
+
+        lv_obj_set_pos(boxes[slot], x, 0);
+        lv_obj_set_size(boxes[slot], w, rowH);
+        lv_obj_clear_flag(boxes[slot], LV_OBJ_FLAG_HIDDEN);
+
+        lv_label_set_text(labels[slot], items[itemIndex].c_str());
+        lv_obj_set_pos(labels[slot], 3, 0);
+        lv_obj_set_size(labels[slot], (w > 6) ? (w - 6) : w, rowH);
+
+        if (isSelected) {
+            lv_obj_set_style_bg_color(boxes[slot], hex(selectedBg), LV_PART_MAIN);
+            lv_obj_set_style_bg_opa(boxes[slot], LV_OPA_COVER, LV_PART_MAIN);
+            lv_obj_set_style_text_color(labels[slot], hex(C_IME_SEL_TEXT), LV_PART_MAIN);
+        } else {
+            lv_obj_set_style_bg_opa(boxes[slot], LV_OPA_TRANSP, LV_PART_MAIN);
+            lv_obj_set_style_text_color(labels[slot], hex(C_TEXT), LV_PART_MAIN);
+        }
+
+        x += w + gap;
     }
 }
 
