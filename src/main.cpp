@@ -5,6 +5,7 @@
 #include "keypad.h"
 #include "nine_key_ime.h"
 #include "WIFI_MQTT.h"
+#include "power_control.h"
 
 // lvgl_port.cpp 里面已经有真正的 TFT_eSPI + LVGL 初始化。
 // 这里不要再重复创建 TFT_eSPI，也不要再重复 lv_init()。
@@ -214,6 +215,8 @@ static void updateStatusUiPeriodically()
 
 void setup()
 {
+    powerControlBegin();
+
     Serial.begin(115200);
     delay(200);
 
@@ -251,6 +254,8 @@ void setup()
 
 void loop()
 {
+    powerControlUpdate();
+
     lv_tick_inc(5);
     lv_timer_handler();
 
