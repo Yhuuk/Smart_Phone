@@ -13,7 +13,9 @@
 static  TFT_eSPI tft;
 
 
-static  constexpr   uint16_t BUF_LINES  =  20;  //20行
+// 新增 HTTP/JSON 协议后 DRAM 更紧张。把 LVGL 刷屏缓冲从 20 行降到 18 行，
+// 只会让一次 flush 的分块略小，不改变小手机 UI 的布局和显示内容。
+static  constexpr   uint16_t BUF_LINES  =  18;
 static  lv_color_t buf1[320 * BUF_LINES];   //lv_color_t是缓冲区
 static  lv_color_t buf2[320 * BUF_LINES];
 static  lv_disp_draw_buf_t  draw_buf;

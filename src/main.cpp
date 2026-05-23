@@ -17,6 +17,7 @@ static WifiMqttManager net;
 
 static uint32_t lastMqttTryMs = 0;
 static uint32_t lastStatusUiMs = 0;
+static bool historySyncAttempted = false;
 
 static void refreshImeUi()
 {
@@ -63,25 +64,20 @@ static void refreshImeUi()
 static void onWifiState(bool connected)
 {
     ui_chat_setWifi(connected);
-    Serial.print("[WIFI] ");
-    Serial.println(connected ? "connected" : "disconnected");
 }
 
 static void onMqttState(bool connected)
 {
     ui_chat_setMqtt(connected);
-    Serial.print("[MQTT] ");
-    Serial.println(connected ? "connected" : "disconnected");
 }
 
-static void onMqttMessage(const char *topic, const String &payload)
+static void onChatMessage(const ChatMessage &msg)
 {
-    Serial.print("[MQTT RX] ");
-    Serial.print(topic);
-    Serial.print(" => ");
-    Serial.println(payload);
-
-    ui_chat_addMessage(payload.c_str(), false);
+    // main.cpp 负责 UI、输入法、按键和通信层的衔接。
+    // JSON 拼接、解析、去重都放在 WIFI_MQTT.cpp，
+    // 避免网络协议细节进入小手机 UI 或九键输入法代码。
+    bool mine = (msg.from == DEVICE_ID);
+    ui_chat_addMessage(msg.text.c_str(), mine);
 }
 
 static void tryConnectMqtt()
@@ -93,9 +89,18 @@ static void tryConnectMqtt()
     if (now - lastMqttTryMs < 3000) return;
     lastMqttTryMs = now;
 
-    Serial.println("[MQTT] trying connect...");
-    bool ok = net.connectMqtt();
-    Serial.println(ok ? "[MQTT] connect ok" : "[MQTT] connect failed");
+    net.connectMqtt();
+}
+
+static void syncHistoryOnceAfterWifi()
+{
+    // 开机后 WiFi 一旦连上，先同步历史，再让 loop 继续连接 MQTT。
+    // HTTP 同步失败也只记录日志，不阻塞小手机继续使用实时 MQTT。
+    if (historySyncAttempted) return;
+    if (!net.wifiConnected()) return;
+
+    historySyncAttempted = true;
+    net.syncHistory(net.lastLocalSeq(), 100);
 }
 
 static void sendCurrentText()
@@ -121,9 +126,10 @@ static void sendCurrentText()
         return;
     }
 
-    bool ok = net.publish(msg.c_str());
+    bool ok = net.publishChat(msg);
     if (ok) {
-        ui_chat_addMessage(msg.c_str(), true);
+        // publish 成功只代表消息发到了 MQTT Broker。
+        // 最终聊天气泡等服务器从 down topic 返回带 seq 的标准消息后再显示。
         ime.clearText();
     } else {
         ui_chat_addMessage("发送失败", false);
@@ -241,7 +247,7 @@ void setup()
 
     net.onWifiStateChange(onWifiState);
     net.onMqttStateChange(onMqttState);
-    net.onMessage(onMqttMessage);
+    net.setChatMessageCallback(onChatMessage);
 
     net.startWifi();
 
@@ -262,6 +268,7 @@ void loop()
     handleKeypad();
 
     net.update();
+    syncHistoryOnceAfterWifi();
     tryConnectMqtt();
     updateStatusUiPeriodically();
 
