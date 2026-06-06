@@ -19,6 +19,7 @@ static const uint16_t MQTT_PORT = 1883;
 // 例如第一台可以叫 phone_a，第二台可以叫 phone_b。
 // 服务器下行消息里的 from == DEVICE_ID 时，main.cpp 会显示右侧气泡。
 static const char *DEVICE_ID = "phone_a";
+// static const char *DEVICE_ID = "phone_b";
 
 // ROOM_ID 是聊天室 ID。HTTP 历史同步和 MQTT topic 都围绕这个房间号工作。
 static const char *ROOM_ID = "room001";

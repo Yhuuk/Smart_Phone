@@ -29,7 +29,7 @@ void ui_chat_setImeCandidates(ImeCandidateRow row,
                               uint8_t selected,
                               uint8_t maxShow,
                               ImeCandidateColorRole colorRole);
-void ui_chat_setInputText(const char *text);
+void ui_chat_setInputText(const char *text, uint16_t cursorPos = 0);
 const char *ui_chat_getInputText();
 
 void ui_chat_addMessage(const char *text, bool mine);

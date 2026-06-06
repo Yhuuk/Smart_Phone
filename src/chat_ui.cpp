@@ -68,7 +68,11 @@ static constexpr uint8_t CHAT_MAX = 20;
 static String g_msgText[CHAT_MAX];
 static bool   g_msgMine[CHAT_MAX] = {false};
 static uint8_t g_msgCount = 0;
-static uint8_t g_viewStart = 0;
+
+static constexpr int16_t CHAT_PANEL_H = 209;
+static constexpr int16_t CHAT_TOP_PAD = 7;
+static constexpr int16_t CHAT_GAP = 7;
+static constexpr int16_t CHAT_SCROLL_STEP = 42;
 
 // =====================
 // 基础工具
@@ -344,10 +348,7 @@ static void measureBubble(const char *text,
                     LV_TEXT_FLAG_NONE);
 
     const int16_t lineH = lv_font_get_line_height(FONT_CN);
-    const int16_t maxLabelH = lineH * 2 + 2;   // 最多显示两行，高度跟你图里的气泡一致
-
     labelH = wrapped.y;
-    if (labelH > maxLabelH) labelH = maxLabelH;
     if (labelH < lineH) labelH = lineH;
 
     bubbleW = labelW + PAD_X * 2;
@@ -375,7 +376,7 @@ static void drawOneMessage(uint8_t idx, int16_t y)
     const int16_t avatarY = y + (bubbleH - avatarSize) / 2;
 
     if (mine) {
-        circleText(g_chatPanel, 202, avatarY, avatarSize, C_BUBBLE_RIGHT, "易");
+        circleText(g_chatPanel, 202, avatarY, avatarSize, C_BUBBLE_RIGHT, "曦");
 
         const int16_t bubbleX = 202 - 6 - bubbleW;
         lv_obj_t *bubble = box(g_chatPanel, bubbleX, y, bubbleW, bubbleH, C_BUBBLE_RIGHT, 8);
@@ -387,7 +388,7 @@ static void drawOneMessage(uint8_t idx, int16_t y)
         lv_label_set_long_mode(txt, LV_LABEL_LONG_WRAP);
         lv_obj_set_style_text_line_space(txt, 2, LV_PART_MAIN);
     } else {
-        circleText(g_chatPanel, 10, avatarY, avatarSize, C_AVATAR_PURPLE, "曦");
+        circleText(g_chatPanel, 10, avatarY, avatarSize, C_AVATAR_PURPLE, "易");
 
         lv_obj_t *bubble = box(g_chatPanel, 42, y, bubbleW, bubbleH, C_BUBBLE_LEFT, 8);
 
@@ -400,77 +401,17 @@ static void drawOneMessage(uint8_t idx, int16_t y)
     }
 }
 
-static uint8_t latestViewStart()
-{
-    const int16_t PANEL_H = 209;
-    const int16_t TOP_PAD = 7;
-    const int16_t GAP = 7;
-
-    uint8_t start = 0;
-    int16_t totalH = 0;
-
-    for (int8_t i = (int8_t)g_msgCount - 1; i >= 0; i--) {
-        int16_t h = bubbleHeightForText(g_msgText[i].c_str());
-        int16_t add = h + ((totalH == 0) ? 0 : GAP);
-
-        if (totalH + add <= PANEL_H - TOP_PAD * 2) {
-            totalH += add;
-            start = i;
-        } else {
-            break;
-        }
-    }
-
-    return start;
-}
-
-static uint8_t clampedViewStart(uint8_t start)
-{
-    if (g_msgCount == 0) return 0;
-
-    uint8_t latestStart = latestViewStart();
-    if (start > latestStart) return latestStart;
-    return start;
-}
-
 static void redrawChatMessages()
 {
     if (!g_chatPanel) return;
 
     lv_obj_clean(g_chatPanel);
 
-    const int16_t PANEL_H = 209;
-    const int16_t TOP_PAD = 7;
-    const int16_t GAP = 7;
-
-    // 动态气泡高度：先从最新消息往前算，保证底部不会被输入法区域盖住。
-    int8_t start = 0;
-    int16_t totalH = 0;
-
-    for (int8_t i = (int8_t)g_msgCount - 1; i >= 0; i--) {
+    int16_t y = CHAT_TOP_PAD;
+    for (uint8_t i = 0; i < g_msgCount; i++) {
         int16_t h = bubbleHeightForText(g_msgText[i].c_str());
-        int16_t add = h + ((totalH == 0) ? 0 : GAP);
-
-        if (totalH + add <= PANEL_H - TOP_PAD * 2) {
-            totalH += add;
-            start = i;
-        } else {
-            break;
-        }
-    }
-
-    g_viewStart = clampedViewStart(g_viewStart);
-    start = (int8_t)g_viewStart;
-
-    int16_t y = TOP_PAD;
-    for (uint8_t i = start; i < g_msgCount; i++) {
-        int16_t h = bubbleHeightForText(g_msgText[i].c_str());
-        if (y > TOP_PAD && y + h > PANEL_H - TOP_PAD) {
-            break;
-        }
-
         drawOneMessage(i, y);
-        y += h + GAP;
+        y += h + CHAT_GAP;
     }
 }
 
@@ -482,7 +423,7 @@ static void createTopBar()
     lv_obj_t *top = box(g_root, 0, 0, 240, 30, C_TOP_BAR, 0);
 
     lv_obj_t *avatar = box(top, 2, 2, 26, 26, C_WHITE, LV_RADIUS_CIRCLE);
-    centerLabel(avatar, "猫", FONT_CN, C_TEXT);
+    centerLabel(avatar, "狗", FONT_CN, C_TEXT);
 
     // 给 mode 留足宽度，num 不会再因为宽度不够导致 m 残影。
     // label 自带不透明背景，切换 cn/en/num 时会把旧字符区域完整擦掉。
@@ -502,7 +443,10 @@ static void createTopBar()
 
 static void createChatArea()
 {
-    g_chatPanel = box(g_root, 4, 36, 232, 209, C_CHAT_PANEL, 7);
+    g_chatPanel = box(g_root, 4, 36, 232, CHAT_PANEL_H, C_CHAT_PANEL, 7);
+    lv_obj_add_flag(g_chatPanel, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_set_scroll_dir(g_chatPanel, LV_DIR_VER);
+    lv_obj_set_scrollbar_mode(g_chatPanel, LV_SCROLLBAR_MODE_OFF);
     redrawChatMessages();
 }
 
@@ -554,11 +498,57 @@ static void createBottomBar()
     lv_obj_set_style_pad_bottom(g_inputTa, 0, LV_PART_MAIN);
 
     lv_textarea_set_one_line(g_inputTa, true);
-    lv_textarea_set_max_length(g_inputTa, 80);
+    lv_textarea_set_max_length(g_inputTa, 0);
     lv_textarea_set_text(g_inputTa, "");
+
+    // remove_style_all() also removes the default textarea cursor style.
+    lv_obj_set_style_border_color(g_inputTa, hex(C_TEXT), LV_PART_CURSOR);
+    lv_obj_set_style_border_width(g_inputTa, 2, LV_PART_CURSOR);
+    lv_obj_set_style_border_side(g_inputTa, LV_BORDER_SIDE_LEFT, LV_PART_CURSOR);
+    lv_obj_set_style_bg_opa(g_inputTa, LV_OPA_TRANSP, LV_PART_CURSOR);
+    lv_obj_set_style_anim_time(g_inputTa, 0, LV_PART_CURSOR);
+    lv_textarea_set_cursor_pos(g_inputTa, 0);
 
     lv_obj_t *send = box(bottom, 190, 1, 47, 26, C_SEND_BTN, 8);
     centerLabel(send, "发送", FONT_CN, C_WHITE);
+}
+
+static void scrollInputCursorIntoView()
+{
+    if (!g_inputTa) return;
+
+    lv_obj_update_layout(g_inputTa);
+
+    lv_obj_t *taLabel = lv_textarea_get_label(g_inputTa);
+    if (!taLabel) return;
+
+    lv_point_t cursorPoint;
+    lv_label_get_letter_pos(taLabel,
+                            lv_textarea_get_cursor_pos(g_inputTa),
+                            &cursorPoint);
+
+    const lv_font_t *font = lv_obj_get_style_text_font(g_inputTa, LV_PART_MAIN);
+    const lv_coord_t lineH = lv_font_get_line_height(font);
+
+    lv_coord_t targetX = lv_obj_get_scroll_left(g_inputTa);
+    const lv_coord_t contentW = lv_obj_get_content_width(g_inputTa);
+    if (cursorPoint.x < targetX) {
+        targetX = cursorPoint.x;
+    } else if (cursorPoint.x + lineH > targetX + contentW) {
+        targetX = cursorPoint.x - contentW + lineH;
+    }
+    if (targetX < 0) targetX = 0;
+
+    lv_coord_t targetY = lv_obj_get_scroll_top(g_inputTa);
+    const lv_coord_t contentH = lv_obj_get_content_height(g_inputTa);
+    if (cursorPoint.y < targetY) {
+        targetY = cursorPoint.y;
+    } else if (cursorPoint.y + lineH > targetY + contentH) {
+        targetY = cursorPoint.y - contentH + lineH;
+    }
+    if (targetY < 0) targetY = 0;
+
+    lv_obj_scroll_to(g_inputTa, targetX, targetY, LV_ANIM_OFF);
 }
 
 // =====================
@@ -576,7 +566,6 @@ void ui_chat_create()
     lv_obj_clear_flag(g_root, LV_OBJ_FLAG_SCROLLABLE);
 
     g_msgCount = 0;
-    g_viewStart = 0;
     for (uint8_t i = 0; i < CHAT_MAX; i++) {
         g_msgText[i] = "";
         g_msgMine[i] = false;
@@ -592,7 +581,7 @@ void ui_chat_create()
     ui_chat_setMqtt(false);
     ui_chat_setBattery(82);
     ui_chat_setIme("", "");
-    ui_chat_setInputText("");
+    ui_chat_setInputText("", 0);
 }
 
 void ui_chat_setMode(const char *mode)
@@ -743,10 +732,17 @@ void ui_chat_setImeCandidates(ImeCandidateRow row,
     }
 }
 
-void ui_chat_setInputText(const char *text)
+void ui_chat_setInputText(const char *text, uint16_t cursorPos)
 {
     if (!g_inputTa) return;
-    lv_textarea_set_text(g_inputTa, text ? text : "");
+
+    const char *safeText = text ? text : "";
+    if (strcmp(lv_textarea_get_text(g_inputTa), safeText) != 0) {
+        lv_textarea_set_text(g_inputTa, safeText);
+    }
+
+    lv_textarea_set_cursor_pos(g_inputTa, cursorPos);
+    scrollInputCursorIntoView();
 }
 
 const char *ui_chat_getInputText()
@@ -772,32 +768,29 @@ void ui_chat_addMessage(const char *text, bool mine)
         g_msgMine[CHAT_MAX - 1] = mine;
     }
 
-    g_viewStart = latestViewStart();
     redrawChatMessages();
+    if (g_chatPanel) {
+        lv_obj_scroll_to_y(g_chatPanel, LV_COORD_MAX, LV_ANIM_OFF);
+    }
 }
 
 void ui_chat_clearMessages()
 {
     g_msgCount = 0;
-    g_viewStart = 0;
     for (uint8_t i = 0; i < CHAT_MAX; i++) {
         g_msgText[i] = "";
         g_msgMine[i] = false;
     }
     redrawChatMessages();
+    if (g_chatPanel) {
+        lv_obj_scroll_to_y(g_chatPanel, 0, LV_ANIM_OFF);
+    }
 }
 
 void ui_chat_scrollMessages(int8_t direction)
 {
-    if (g_msgCount == 0 || direction == 0) return;
+    if (!g_chatPanel || direction == 0) return;
 
-    uint8_t latestStart = latestViewStart();
-
-    if (direction < 0) {
-        if (g_viewStart > 0) g_viewStart--;
-    } else {
-        if (g_viewStart < latestStart) g_viewStart++;
-    }
-
-    redrawChatMessages();
+    lv_coord_t dy = (direction < 0) ? CHAT_SCROLL_STEP : -CHAT_SCROLL_STEP;
+    lv_obj_scroll_by_bounded(g_chatPanel, 0, dy, LV_ANIM_ON);
 }

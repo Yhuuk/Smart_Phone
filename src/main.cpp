@@ -25,7 +25,7 @@ static void refreshImeUi()
     String modeName = ime.modeName();
     ui_chat_setMode(modeName.c_str());
 
-    ui_chat_setInputText(ime.text().c_str());
+    ui_chat_setInputText(ime.text().c_str(), ime.textCursor());
     ui_chat_setIme("", "");
 
     if (mode == INPUT_CN) {
