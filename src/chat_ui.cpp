@@ -1,4 +1,5 @@
 #include "chat_ui.h"
+#include <stdio.h>
 #include <string.h>
 
 /*
@@ -11,6 +12,7 @@ LV_FONT_DECLARE(ui_font_HanSans_cn_10_8);
 #define UI_H 320
 
 #define FONT_CN     (&ui_font_HanSans_cn_10_8)
+#define FONT_BATT   FONT_CN
 #define FONT_SMALL  (&lv_font_montserrat_14)
 
 // =====================
@@ -36,6 +38,8 @@ static const uint32_t C_IME_SEL_TEXT      = 0xFFFFFF;  // 这里是选中候选�
 
 static const uint32_t C_WHITE         = 0xFFFFFF;
 static const uint32_t C_GREEN         = 0x22F05A;
+static const uint32_t C_BATTERY_LOW   = 0xFF3030;
+static const uint32_t C_BATTERY_TEXT_ON_FILL = 0x001A1A;
 static const uint32_t C_GRAY          = 0x808080;
 static const uint32_t C_TEXT          = 0x092D32;
 static const uint32_t C_AVATAR_PURPLE = 0xA938E3;
@@ -51,6 +55,7 @@ static lv_obj_t *g_dateLabel = nullptr;
 static lv_obj_t *g_timeLabel = nullptr;
 static lv_obj_t *g_wifiLabel = nullptr;
 static lv_obj_t *g_batteryFill = nullptr;
+static lv_obj_t *g_batteryLabel = nullptr;
 
 static lv_obj_t *g_mqttParts[5] = {nullptr, nullptr, nullptr, nullptr, nullptr};
 
@@ -304,6 +309,9 @@ static void makeBattery(lv_obj_t *parent, int16_t x, int16_t y)
     borderBox(parent, x, y, 25, 15, C_WHITE, 2, 3);
     box(parent, x + 25, y + 4, 3, 7, C_WHITE, 1);
     g_batteryFill = box(parent, x + 4, y + 4, 16, 7, C_GREEN, 1);
+    // 数字放在电池框里；不显示 %，避免 100% 在小图标里挤压。
+    g_batteryLabel = label(parent, "--", x, y + 2, 25, 12,
+                           FONT_BATT, C_WHITE, LV_TEXT_ALIGN_CENTER);
 }
 
 static void makeEmoji(lv_obj_t *parent, int16_t x, int16_t y)
@@ -381,7 +389,7 @@ static void drawOneMessage(uint8_t idx, int16_t y)
     const int16_t avatarY = y + (bubbleH - avatarSize) / 2;
 
     if (mine) {
-        circleText(g_chatPanel, 202, avatarY, avatarSize, C_BUBBLE_RIGHT, "易");
+        circleText(g_chatPanel, 202, avatarY, avatarSize, C_BUBBLE_RIGHT, "曦");
 
         const int16_t bubbleX = 202 - 6 - bubbleW;
         lv_obj_t *bubble = box(g_chatPanel, bubbleX, y, bubbleW, bubbleH, C_BUBBLE_RIGHT, 8);
@@ -393,7 +401,7 @@ static void drawOneMessage(uint8_t idx, int16_t y)
         lv_label_set_long_mode(txt, LV_LABEL_LONG_WRAP);
         lv_obj_set_style_text_line_space(txt, MSG_LINE_SPACE, LV_PART_MAIN);
     } else {
-        circleText(g_chatPanel, 10, avatarY, avatarSize, C_AVATAR_PURPLE, "曦");
+        circleText(g_chatPanel, 10, avatarY, avatarSize, C_AVATAR_PURPLE, "易");
 
         lv_obj_t *bubble = box(g_chatPanel, 42, y, bubbleW, bubbleH, C_BUBBLE_LEFT, 8);
 
@@ -428,7 +436,7 @@ static void createTopBar()
     lv_obj_t *top = box(g_root, 0, 0, 240, 30, C_TOP_BAR, 0);
 
     lv_obj_t *avatar = box(top, 2, 2, 26, 26, C_WHITE, LV_RADIUS_CIRCLE);
-    centerLabel(avatar, "猫", FONT_CN, C_TEXT);
+    centerLabel(avatar, "狗", FONT_CN, C_TEXT);
 
     // 头像右侧放两行时间，不挤占右侧 mode / WiFi / 电池图标。
     g_dateLabel = label(top, "---- -- --", 34, 2, 78, 12,
@@ -593,7 +601,7 @@ void ui_chat_create()
     ui_chat_setMode("cn");
     ui_chat_setWifi(false);
     ui_chat_setMqtt(false);
-    ui_chat_setBattery(82);
+    ui_chat_setBattery(0);
     ui_chat_setIme("", "");
     ui_chat_setInputText("", 0);
 }
@@ -665,7 +673,19 @@ void ui_chat_setBattery(uint8_t percent)
     int16_t w = (int16_t)((16 * percent) / 100);
     if (percent > 0 && w < 1) w = 1;
 
+    setBg(g_batteryFill, (percent < 20) ? C_BATTERY_LOW : C_GREEN);
     lv_obj_set_width(g_batteryFill, w);
+
+    if (g_batteryLabel) {
+        char buf[4];
+        snprintf(buf, sizeof(buf), "%u", percent);
+        lv_label_set_text(g_batteryLabel, buf);
+        // 电量条覆盖到数字区域时用深色字；低电量/空白背景上保留白色字。
+        lv_obj_set_style_text_color(g_batteryLabel,
+                                    hex((percent >= 55) ? C_BATTERY_TEXT_ON_FILL : C_WHITE),
+                                    LV_PART_MAIN);
+        lv_obj_move_foreground(g_batteryLabel);
+    }
 }
 
 void ui_chat_setIme(const char *pinyin, const char *hanzi)

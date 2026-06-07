@@ -7,6 +7,7 @@
 #include "WIFI_MQTT.h"
 #include "power_control.h"
 #include "phone_time.h"
+#include "battery_monitor.h"
 
 // lvgl_port.cpp 里面已经有真正的 TFT_eSPI + LVGL 初始化。
 // 这里不要再重复创建 TFT_eSPI，也不要再重复 lv_init()。
@@ -219,7 +220,10 @@ static void updateStatusUiPeriodically()
 
     ui_chat_setWifi(wifiOk);
     ui_chat_setMqtt(net.mqttConnected());
-    ui_chat_setBattery(82);   // 目前还是固定电量；后面接 ADC 后再替换这里。
+
+    // 电池模块内部限制为每分钟测一次，平时不会打开分压检测电路。
+    battery_monitor_update();
+    ui_chat_setBattery(battery_monitor_percent());
 
     // WiFi 连上后自动触发 NTP；未同步前显示占位时间。
     phone_time_update(wifiOk);
@@ -244,6 +248,7 @@ void setup()
 
     ui_chat_create();
     phone_time_begin();
+    battery_monitor_begin();
     ui_chat_setClock("---- -- --", "--- --:--");
 
     keypad.begin(25);
@@ -269,7 +274,8 @@ void setup()
 
     ui_chat_setWifi(false);
     ui_chat_setMqtt(false);
-    ui_chat_setBattery(82);
+    battery_monitor_update();
+    ui_chat_setBattery(battery_monitor_percent());
 
     Serial.println("[BOOT] ESP32 phone started");
 }
