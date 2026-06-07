@@ -6,6 +6,7 @@
 void ui_chat_create();
 
 void ui_chat_setMode(const char *mode);
+void ui_chat_setClock(const char *dateText, const char *timeText);
 void ui_chat_setWifi(bool connected);
 void ui_chat_setMqtt(bool connected);
 void ui_chat_setBattery(uint8_t percent);

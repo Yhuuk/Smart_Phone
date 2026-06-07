@@ -6,6 +6,7 @@
 #include "nine_key_ime.h"
 #include "WIFI_MQTT.h"
 #include "power_control.h"
+#include "phone_time.h"
 
 // lvgl_port.cpp 里面已经有真正的 TFT_eSPI + LVGL 初始化。
 // 这里不要再重复创建 TFT_eSPI，也不要再重复 lv_init()。
@@ -214,9 +215,22 @@ static void updateStatusUiPeriodically()
     if (now - lastStatusUiMs < 500) return;
     lastStatusUiMs = now;
 
-    ui_chat_setWifi(net.wifiConnected());
+    const bool wifiOk = net.wifiConnected();
+
+    ui_chat_setWifi(wifiOk);
     ui_chat_setMqtt(net.mqttConnected());
     ui_chat_setBattery(82);   // 目前还是固定电量；后面接 ADC 后再替换这里。
+
+    // WiFi 连上后自动触发 NTP；未同步前显示占位时间。
+    phone_time_update(wifiOk);
+
+    char dateLine[16];
+    char timeLine[16];
+    if (phone_time_format(dateLine, sizeof(dateLine), timeLine, sizeof(timeLine))) {
+        ui_chat_setClock(dateLine, timeLine);
+    } else {
+        ui_chat_setClock("---- -- --", "--- --:--");
+    }
 }
 
 void setup()
@@ -229,6 +243,8 @@ void setup()
     lvgl_port_init();
 
     ui_chat_create();
+    phone_time_begin();
+    ui_chat_setClock("---- -- --", "--- --:--");
 
     keypad.begin(25);
     keypad.enableRepeat('*', 500, 80);

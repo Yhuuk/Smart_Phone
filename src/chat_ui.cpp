@@ -47,6 +47,8 @@ static lv_obj_t *g_root = nullptr;
 static lv_obj_t *g_chatPanel = nullptr;
 
 static lv_obj_t *g_modeLabel = nullptr;
+static lv_obj_t *g_dateLabel = nullptr;
+static lv_obj_t *g_timeLabel = nullptr;
 static lv_obj_t *g_wifiLabel = nullptr;
 static lv_obj_t *g_batteryFill = nullptr;
 
@@ -428,6 +430,12 @@ static void createTopBar()
     lv_obj_t *avatar = box(top, 2, 2, 26, 26, C_WHITE, LV_RADIUS_CIRCLE);
     centerLabel(avatar, "猫", FONT_CN, C_TEXT);
 
+    // 头像右侧放两行时间，不挤占右侧 mode / WiFi / 电池图标。
+    g_dateLabel = label(top, "---- -- --", 34, 2, 78, 12,
+                        FONT_CN, C_WHITE, LV_TEXT_ALIGN_LEFT);
+    g_timeLabel = label(top, "--- --:--", 34, 15, 78, 12,
+                        FONT_CN, C_WHITE, LV_TEXT_ALIGN_LEFT);
+
     // 给 mode 留足宽度，num 不会再因为宽度不够导致 m 残影。
     // label 自带不透明背景，切换 cn/en/num 时会把旧字符区域完整擦掉。
     g_modeLabel = label(top, "cn", 116, 6, 38, 18,
@@ -608,6 +616,17 @@ void ui_chat_setMode(const char *mode)
     }
 
     lv_label_set_text(g_modeLabel, m);
+}
+
+void ui_chat_setClock(const char *dateText, const char *timeText)
+{
+    if (g_dateLabel) {
+        lv_label_set_text(g_dateLabel, dateText ? dateText : "");
+    }
+
+    if (g_timeLabel) {
+        lv_label_set_text(g_timeLabel, timeText ? timeText : "");
+    }
 }
 
 void ui_chat_setWifi(bool connected)
