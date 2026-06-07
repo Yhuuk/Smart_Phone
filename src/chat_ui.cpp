@@ -5,12 +5,12 @@
    你的中文字体文件：src/ui_font_HanSans_cn_16_495.c
    如果你的字体变量名不是这个，只改下面这一行。
 */
-LV_FONT_DECLARE(ui_font_HanSans_cn_16);
+LV_FONT_DECLARE(ui_font_HanSans_cn_10_8);
 
 #define UI_W 240
 #define UI_H 320
 
-#define FONT_CN     (&ui_font_HanSans_cn_16)
+#define FONT_CN     (&ui_font_HanSans_cn_10_8)
 #define FONT_SMALL  (&lv_font_montserrat_14)
 
 // =====================
@@ -70,9 +70,19 @@ static bool   g_msgMine[CHAT_MAX] = {false};
 static uint8_t g_msgCount = 0;
 
 static constexpr int16_t CHAT_PANEL_H = 209;
-static constexpr int16_t CHAT_TOP_PAD = 7;
-static constexpr int16_t CHAT_GAP = 7;
+static constexpr int16_t CHAT_TOP_PAD = 4;
+static constexpr int16_t CHAT_GAP = 4;
 static constexpr int16_t CHAT_SCROLL_STEP = 42;
+
+static constexpr int16_t MSG_MAX_TEXT_W = 164;
+static constexpr int16_t MSG_MIN_TEXT_W = 16;
+static constexpr int16_t MSG_PAD_X = 5;
+static constexpr int16_t MSG_PAD_Y = 3;
+static constexpr int16_t MSG_LINE_SPACE = 1;
+static constexpr int16_t MSG_MIN_BUBBLE_W = 26;
+static constexpr int16_t MSG_MIN_BUBBLE_H = 20;
+
+static constexpr int16_t IME_ROW_H = 15;
 
 // =====================
 // 基础工具
@@ -238,10 +248,10 @@ static void createImeCandidateSlots(lv_obj_t *parent,
                                     lv_obj_t **labels)
 {
     for (uint8_t i = 0; i < IME_MAX_ROW_ITEMS; i++) {
-        boxes[i] = box(parent, 0, 0, 20, 17, C_ROW_BG, 3);
+        boxes[i] = box(parent, 0, 0, 20, IME_ROW_H, C_ROW_BG, 3);
         lv_obj_set_style_bg_opa(boxes[i], LV_OPA_TRANSP, LV_PART_MAIN);
 
-        labels[i] = label(boxes[i], "", 3, 0, 14, 17,
+        labels[i] = label(boxes[i], "", 3, 0, 14, IME_ROW_H,
                           FONT_CN, C_TEXT, LV_TEXT_ALIGN_CENTER);
 
         lv_obj_add_flag(boxes[i], LV_OBJ_FLAG_HIDDEN);
@@ -320,30 +330,23 @@ static void measureBubble(const char *text,
 {
     if (text == nullptr) text = "";
 
-    const int16_t MAX_TEXT_W = 132;
-    const int16_t MIN_TEXT_W = 16;
-    const int16_t PAD_X = 8;
-    const int16_t PAD_Y = 5;
-    const int16_t MIN_BUBBLE_W = 34;
-    const int16_t MIN_BUBBLE_H = 30;
-
     lv_point_t oneLine;
     lv_txt_get_size(&oneLine,
                     text,
                     FONT_CN,
                     0,
-                    2,
+                    MSG_LINE_SPACE,
                     1000,
                     LV_TEXT_FLAG_NONE);
 
-    labelW = clamp16(oneLine.x, MIN_TEXT_W, MAX_TEXT_W);
+    labelW = clamp16(oneLine.x, MSG_MIN_TEXT_W, MSG_MAX_TEXT_W);
 
     lv_point_t wrapped;
     lv_txt_get_size(&wrapped,
                     text,
                     FONT_CN,
                     0,
-                    2,
+                    MSG_LINE_SPACE,
                     labelW,
                     LV_TEXT_FLAG_NONE);
 
@@ -351,11 +354,11 @@ static void measureBubble(const char *text,
     labelH = wrapped.y;
     if (labelH < lineH) labelH = lineH;
 
-    bubbleW = labelW + PAD_X * 2;
-    bubbleH = labelH + PAD_Y * 2;
+    bubbleW = labelW + MSG_PAD_X * 2;
+    bubbleH = labelH + MSG_PAD_Y * 2;
 
-    if (bubbleW < MIN_BUBBLE_W) bubbleW = MIN_BUBBLE_W;
-    if (bubbleH < MIN_BUBBLE_H) bubbleH = MIN_BUBBLE_H;
+    if (bubbleW < MSG_MIN_BUBBLE_W) bubbleW = MSG_MIN_BUBBLE_W;
+    if (bubbleH < MSG_MIN_BUBBLE_H) bubbleH = MSG_MIN_BUBBLE_H;
 }
 
 static int16_t bubbleHeightForText(const char *text)
@@ -376,28 +379,28 @@ static void drawOneMessage(uint8_t idx, int16_t y)
     const int16_t avatarY = y + (bubbleH - avatarSize) / 2;
 
     if (mine) {
-        circleText(g_chatPanel, 202, avatarY, avatarSize, C_BUBBLE_RIGHT, "曦");
+        circleText(g_chatPanel, 202, avatarY, avatarSize, C_BUBBLE_RIGHT, "易");
 
         const int16_t bubbleX = 202 - 6 - bubbleW;
         lv_obj_t *bubble = box(g_chatPanel, bubbleX, y, bubbleW, bubbleH, C_BUBBLE_RIGHT, 8);
 
         lv_obj_t *txt = label(bubble, g_msgText[idx].c_str(),
-                              8, (bubbleH - labelH) / 2,
+                              MSG_PAD_X, MSG_PAD_Y,
                               labelW, labelH,
                               FONT_CN, C_TEXT, LV_TEXT_ALIGN_LEFT);
         lv_label_set_long_mode(txt, LV_LABEL_LONG_WRAP);
-        lv_obj_set_style_text_line_space(txt, 2, LV_PART_MAIN);
+        lv_obj_set_style_text_line_space(txt, MSG_LINE_SPACE, LV_PART_MAIN);
     } else {
-        circleText(g_chatPanel, 10, avatarY, avatarSize, C_AVATAR_PURPLE, "易");
+        circleText(g_chatPanel, 10, avatarY, avatarSize, C_AVATAR_PURPLE, "曦");
 
         lv_obj_t *bubble = box(g_chatPanel, 42, y, bubbleW, bubbleH, C_BUBBLE_LEFT, 8);
 
         lv_obj_t *txt = label(bubble, g_msgText[idx].c_str(),
-                              8, (bubbleH - labelH) / 2,
+                              MSG_PAD_X, MSG_PAD_Y,
                               labelW, labelH,
                               FONT_CN, C_WHITE, LV_TEXT_ALIGN_LEFT);
         lv_label_set_long_mode(txt, LV_LABEL_LONG_WRAP);
-        lv_obj_set_style_text_line_space(txt, 2, LV_PART_MAIN);
+        lv_obj_set_style_text_line_space(txt, MSG_LINE_SPACE, LV_PART_MAIN);
     }
 }
 
@@ -423,7 +426,7 @@ static void createTopBar()
     lv_obj_t *top = box(g_root, 0, 0, 240, 30, C_TOP_BAR, 0);
 
     lv_obj_t *avatar = box(top, 2, 2, 26, 26, C_WHITE, LV_RADIUS_CIRCLE);
-    centerLabel(avatar, "狗", FONT_CN, C_TEXT);
+    centerLabel(avatar, "猫", FONT_CN, C_TEXT);
 
     // 给 mode 留足宽度，num 不会再因为宽度不够导致 m 残影。
     // label 自带不透明背景，切换 cn/en/num 时会把旧字符区域完整擦掉。
@@ -452,33 +455,33 @@ static void createChatArea()
 
 static void createImeArea()
 {
-    // 拼音区：250 ~ 266
-    g_pinyinRow = box(g_root, 0, 250, 240, 17, C_ROW_BG, 2);
-    g_pinyinLabel = label(g_pinyinRow, "", 20, 0, 210, 17,
+    // 拼音区：247 ~ 261
+    g_pinyinRow = box(g_root, 0, 247, 240, IME_ROW_H, C_ROW_BG, 2);
+    g_pinyinLabel = label(g_pinyinRow, "", 20, 0, 210, IME_ROW_H,
                           FONT_CN, C_TEXT, LV_TEXT_ALIGN_LEFT);
     createImeCandidateSlots(g_pinyinRow, g_pinyinCandBox, g_pinyinCandLabel);
 
-    // 分隔线：267 ~ 268
-    box(g_root, 0, 267, 240, 2, C_SCREEN_BG, 0);
+    // 分隔线：263
+    box(g_root, 0, 263, 240, 1, C_SCREEN_BG, 0);
 
-    // 汉字候选区：269 ~ 285
-    g_hanziRow = box(g_root, 0, 269, 240, 17, C_ROW_BG, 2);
-    g_hanziLabel = label(g_hanziRow, "", 20, 0, 210, 17,
+    // 汉字候选区：265 ~ 279
+    g_hanziRow = box(g_root, 0, 265, 240, IME_ROW_H, C_ROW_BG, 2);
+    g_hanziLabel = label(g_hanziRow, "", 20, 0, 210, IME_ROW_H,
                          FONT_CN, C_TEXT, LV_TEXT_ALIGN_LEFT);
     createImeCandidateSlots(g_hanziRow, g_hanziCandBox, g_hanziCandLabel);
 }
 
 static void createBottomBar()
 {
-    lv_obj_t *bottom = box(g_root, 0, 291, 240, 29, C_BOTTOM_BG, 0);
+    lv_obj_t *bottom = box(g_root, 0, 284, 240, 36, C_BOTTOM_BG, 0);
 
-    makeEmoji(bottom, 7, 6);
+    makeEmoji(bottom, 7, 9);
 
     g_inputTa = lv_textarea_create(bottom);
     lv_obj_remove_style_all(g_inputTa);
 
-    lv_obj_set_pos(g_inputTa, 30, 1);
-    lv_obj_set_size(g_inputTa, 148, 26);
+    lv_obj_set_pos(g_inputTa, 30, 2);
+    lv_obj_set_size(g_inputTa, 154, 32);
 
     lv_obj_set_style_bg_color(g_inputTa, hex(C_WHITE), LV_PART_MAIN);
     lv_obj_set_style_bg_opa(g_inputTa, LV_OPA_COVER, LV_PART_MAIN);
@@ -492,12 +495,15 @@ static void createBottomBar()
     lv_obj_set_style_text_color(g_inputTa, hex(C_TEXT), LV_PART_MAIN);
     lv_obj_set_style_text_opa(g_inputTa, LV_OPA_COVER, LV_PART_MAIN);
 
-    lv_obj_set_style_pad_left(g_inputTa, 8, LV_PART_MAIN);
-    lv_obj_set_style_pad_right(g_inputTa, 8, LV_PART_MAIN);
-    lv_obj_set_style_pad_top(g_inputTa, 4, LV_PART_MAIN);
-    lv_obj_set_style_pad_bottom(g_inputTa, 0, LV_PART_MAIN);
+    lv_obj_set_style_pad_left(g_inputTa, 5, LV_PART_MAIN);
+    lv_obj_set_style_pad_right(g_inputTa, 5, LV_PART_MAIN);
+    lv_obj_set_style_pad_top(g_inputTa, 2, LV_PART_MAIN);
+    lv_obj_set_style_pad_bottom(g_inputTa, 1, LV_PART_MAIN);
+    lv_obj_set_style_text_line_space(g_inputTa, 1, LV_PART_MAIN);
 
-    lv_textarea_set_one_line(g_inputTa, true);
+    lv_textarea_set_one_line(g_inputTa, false);
+    lv_obj_set_scroll_dir(g_inputTa, LV_DIR_VER);
+    lv_obj_set_scrollbar_mode(g_inputTa, LV_SCROLLBAR_MODE_OFF);
     lv_textarea_set_max_length(g_inputTa, 0);
     lv_textarea_set_text(g_inputTa, "");
 
@@ -509,7 +515,7 @@ static void createBottomBar()
     lv_obj_set_style_anim_time(g_inputTa, 0, LV_PART_CURSOR);
     lv_textarea_set_cursor_pos(g_inputTa, 0);
 
-    lv_obj_t *send = box(bottom, 190, 1, 47, 26, C_SEND_BTN, 8);
+    lv_obj_t *send = box(bottom, 190, 3, 47, 30, C_SEND_BTN, 8);
     centerLabel(send, "发送", FONT_CN, C_WHITE);
 }
 
@@ -697,7 +703,7 @@ void ui_chat_setImeCandidates(ImeCandidateRow row,
     const int16_t rowX = 20;
     const int16_t rowW = 210;
     const int16_t gap = 4;
-    const int16_t rowH = 17;
+    const int16_t rowH = IME_ROW_H;
     int16_t maxSlotW = (rowW - (gap * (visibleCount - 1))) / visibleCount;
     if (maxSlotW < 20) maxSlotW = 20;
 
