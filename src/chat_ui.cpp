@@ -1,6 +1,7 @@
 #include "chat_ui.h"
 #include <stdio.h>
 #include <string.h>
+#include <time.h>
 
 /*
    你的中文字体文件：src/ui_font_HanSans_cn_16_495.c
@@ -41,6 +42,7 @@ static const uint32_t C_GREEN         = 0x22F05A;
 static const uint32_t C_BATTERY_LOW   = 0xFF3030;
 static const uint32_t C_BATTERY_TEXT_ON_FILL = 0x001A1A;
 static const uint32_t C_GRAY          = 0x808080;
+static const uint32_t C_TIME_TEXT     = 0xD8D1EA;
 static const uint32_t C_TEXT          = 0x092D32;
 static const uint32_t C_AVATAR_PURPLE = 0xA938E3;
 
@@ -71,15 +73,24 @@ static lv_obj_t *g_pinyinCandLabel[IME_MAX_ROW_ITEMS] = {nullptr};
 static lv_obj_t *g_hanziCandBox[IME_MAX_ROW_ITEMS] = {nullptr};
 static lv_obj_t *g_hanziCandLabel[IME_MAX_ROW_ITEMS] = {nullptr};
 
-static constexpr uint8_t CHAT_MAX = 20;
-static String g_msgText[CHAT_MAX];
-static bool   g_msgMine[CHAT_MAX] = {false};
+static constexpr uint8_t CHAT_MAX = 100;
+static String *g_msgText = nullptr;
+static bool *g_msgMine = nullptr;
+static uint32_t *g_msgTs = nullptr;
 static uint8_t g_msgCount = 0;
+static bool g_msgBatchMode = false;
+static bool g_msgBatchDirty = false;
+static int16_t g_msgViewLast = -1;
+static bool g_msgAutoFollow = true;
 
 static constexpr int16_t CHAT_PANEL_H = 209;
 static constexpr int16_t CHAT_TOP_PAD = 4;
 static constexpr int16_t CHAT_GAP = 4;
 static constexpr int16_t CHAT_SCROLL_STEP = 42;
+static constexpr uint32_t CHAT_TIME_GAP_SEC = 5 * 60;
+static constexpr int16_t TIME_LABEL_H = 13;
+static constexpr int16_t TIME_AFTER_GAP = 2;
+static constexpr int16_t CHAT_BOTTOM_PAD = 4;
 
 static constexpr int16_t MSG_MAX_TEXT_W = 164;
 static constexpr int16_t MSG_MIN_TEXT_W = 16;
@@ -94,6 +105,23 @@ static constexpr int16_t IME_ROW_H = 15;
 // =====================
 // 基础工具
 // =====================
+static bool ensureMessageStorage()
+{
+    if (!g_msgText) {
+        g_msgText = new String[CHAT_MAX];
+    }
+
+    if (!g_msgMine) {
+        g_msgMine = new bool[CHAT_MAX]();
+    }
+
+    if (!g_msgTs) {
+        g_msgTs = new uint32_t[CHAT_MAX]();
+    }
+
+    return g_msgText && g_msgMine && g_msgTs;
+}
+
 static lv_color_t hex(uint32_t c)
 {
     return lv_color_hex(c);
@@ -199,6 +227,45 @@ static lv_obj_t *centerLabel(lv_obj_t *parent,
     lv_obj_set_style_text_align(obj, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
 
     lv_obj_center(obj);
+    return obj;
+}
+
+static lv_obj_t *bubbleLabel(lv_obj_t *parent,
+                             const char *txt,
+                             int16_t x,
+                             int16_t y,
+                             int16_t w,
+                             int16_t h,
+                             uint32_t bgColor,
+                             uint32_t textColor)
+{
+    lv_obj_t *obj = lv_label_create(parent);
+    lv_obj_remove_style_all(obj);
+
+    lv_obj_set_pos(obj, x, y);
+    lv_obj_set_size(obj, w, h);
+
+    lv_label_set_text(obj, txt ? txt : "");
+    lv_label_set_long_mode(obj, LV_LABEL_LONG_WRAP);
+
+    lv_obj_set_style_bg_color(obj, hex(bgColor), LV_PART_MAIN);
+    lv_obj_set_style_bg_opa(obj, LV_OPA_COVER, LV_PART_MAIN);
+    lv_obj_set_style_radius(obj, 8, LV_PART_MAIN);
+    lv_obj_set_style_pad_left(obj, MSG_PAD_X, LV_PART_MAIN);
+    lv_obj_set_style_pad_right(obj, MSG_PAD_X, LV_PART_MAIN);
+    lv_obj_set_style_pad_top(obj, MSG_PAD_Y, LV_PART_MAIN);
+    lv_obj_set_style_pad_bottom(obj, MSG_PAD_Y, LV_PART_MAIN);
+
+    lv_obj_set_style_text_font(obj, FONT_CN, LV_PART_MAIN);
+    lv_obj_set_style_text_color(obj, hex(textColor), LV_PART_MAIN);
+    lv_obj_set_style_text_opa(obj, LV_OPA_COVER, LV_PART_MAIN);
+    lv_obj_set_style_text_align(obj, LV_TEXT_ALIGN_LEFT, LV_PART_MAIN);
+    lv_obj_set_style_text_line_space(obj, MSG_LINE_SPACE, LV_PART_MAIN);
+
+    lv_obj_set_style_border_width(obj, 0, LV_PART_MAIN);
+    lv_obj_set_style_outline_width(obj, 0, LV_PART_MAIN);
+    lv_obj_set_style_shadow_width(obj, 0, LV_PART_MAIN);
+    lv_obj_clear_flag(obj, LV_OBJ_FLAG_SCROLLABLE);
     return obj;
 }
 
@@ -378,6 +445,163 @@ static int16_t bubbleHeightForText(const char *text)
     return bh;
 }
 
+static bool sameLocalDay(uint32_t a, uint32_t b)
+{
+    if (a == 0 || b == 0) return false;
+
+    time_t ta = (time_t)a;
+    time_t tb = (time_t)b;
+    struct tm la;
+    struct tm lb;
+
+    if (!localtime_r(&ta, &la) || !localtime_r(&tb, &lb)) {
+        return false;
+    }
+
+    return la.tm_year == lb.tm_year && la.tm_yday == lb.tm_yday;
+}
+
+static bool shouldShowTimeDivider(uint8_t idx)
+{
+    if (idx >= g_msgCount || g_msgTs[idx] == 0) return false;
+
+    if (idx == 0) return true;
+
+    const uint32_t nowTs = g_msgTs[idx];
+    const uint32_t prevTs = g_msgTs[idx - 1];
+    if (prevTs == 0) return true;
+
+    if (!sameLocalDay(nowTs, prevTs)) return true;
+
+    return (nowTs > prevTs) && ((nowTs - prevTs) >= CHAT_TIME_GAP_SEC);
+}
+
+static void formatTimeDivider(uint8_t idx, char *buf, size_t len)
+{
+    if (!buf || len == 0) return;
+    buf[0] = '\0';
+
+    if (idx >= g_msgCount || g_msgTs[idx] == 0) return;
+
+    time_t t = (time_t)g_msgTs[idx];
+    struct tm localTime;
+    if (!localtime_r(&t, &localTime)) return;
+
+    const uint32_t nowTs = (uint32_t)time(nullptr);
+    const bool firstMessageFromToday = (idx == 0) && sameLocalDay(g_msgTs[idx], nowTs);
+
+    if (idx != 0 && sameLocalDay(g_msgTs[idx], g_msgTs[idx - 1])) {
+        snprintf(buf, len, "%02d:%02d",
+                 localTime.tm_hour,
+                 localTime.tm_min);
+    } else if (firstMessageFromToday) {
+        snprintf(buf, len, "%02d:%02d",
+                 localTime.tm_hour,
+                 localTime.tm_min);
+    } else {
+        snprintf(buf, len, "%02d-%02d %02d:%02d",
+                 localTime.tm_mon + 1,
+                 localTime.tm_mday,
+                 localTime.tm_hour,
+                 localTime.tm_min);
+    }
+}
+
+static void drawTimeDivider(uint8_t idx, int16_t y)
+{
+    char buf[16];
+    formatTimeDivider(idx, buf, sizeof(buf));
+    if (buf[0] == '\0') return;
+
+    label(g_chatPanel, buf, 0, y, 232, TIME_LABEL_H,
+          FONT_CN, C_TIME_TEXT, LV_TEXT_ALIGN_CENTER);
+}
+
+static void setMessageViewToBottom()
+{
+    g_msgAutoFollow = true;
+    g_msgViewLast = (g_msgCount > 0) ? (int16_t)(g_msgCount - 1) : -1;
+}
+
+static void clampMessageView()
+{
+    if (g_msgCount == 0) {
+        g_msgViewLast = -1;
+        g_msgAutoFollow = true;
+        return;
+    }
+
+    if (g_msgAutoFollow || g_msgViewLast < 0) {
+        g_msgViewLast = (int16_t)(g_msgCount - 1);
+    } else if (g_msgViewLast >= g_msgCount) {
+        g_msgViewLast = (int16_t)(g_msgCount - 1);
+    }
+}
+
+static bool shouldShowTimeDividerInWindow(uint8_t idx, uint8_t windowFirst)
+{
+    if (idx >= g_msgCount || g_msgTs[idx] == 0) return false;
+    return idx == windowFirst || shouldShowTimeDivider(idx);
+}
+
+static int32_t renderedMessageHeight(uint8_t idx, uint8_t windowFirst)
+{
+    int32_t h = 0;
+    if (shouldShowTimeDividerInWindow(idx, windowFirst)) {
+        h += TIME_LABEL_H + TIME_AFTER_GAP;
+    }
+
+    h += bubbleHeightForText(g_msgText[idx].c_str()) + CHAT_GAP;
+    return h;
+}
+
+static int32_t renderedWindowHeight(uint8_t first, uint8_t last)
+{
+    int32_t h = CHAT_TOP_PAD + CHAT_BOTTOM_PAD;
+    for (uint8_t i = first; i <= last; i++) {
+        h += renderedMessageHeight(i, first);
+        if (i == last) break;
+    }
+    return h;
+}
+
+static uint8_t findWindowFirst(uint8_t last)
+{
+    uint8_t best = last;
+
+    for (int16_t first = last; first >= 0; first--) {
+        int32_t h = renderedWindowHeight((uint8_t)first, last);
+        if (h > CHAT_PANEL_H && first < last) {
+            return (uint8_t)(first + 1);
+        }
+
+        best = (uint8_t)first;
+        if (first == 0) break;
+    }
+
+    return best;
+}
+
+static bool scrollRenderedWindow(int8_t direction)
+{
+    if (!g_chatPanel || direction == 0) return false;
+
+    lv_obj_update_layout(g_chatPanel);
+
+    if (direction < 0 && lv_obj_get_scroll_top(g_chatPanel) > 0) {
+        lv_obj_scroll_by_bounded(g_chatPanel, 0, CHAT_SCROLL_STEP, LV_ANIM_ON);
+        g_msgAutoFollow = false;
+        return true;
+    }
+
+    if (direction > 0 && lv_obj_get_scroll_bottom(g_chatPanel) > 0) {
+        lv_obj_scroll_by_bounded(g_chatPanel, 0, -CHAT_SCROLL_STEP, LV_ANIM_ON);
+        return true;
+    }
+
+    return false;
+}
+
 static void drawOneMessage(uint8_t idx, int16_t y)
 {
     const bool mine = g_msgMine[idx];
@@ -385,11 +609,37 @@ static void drawOneMessage(uint8_t idx, int16_t y)
     int16_t bubbleW, bubbleH, labelW, labelH;
     measureBubble(g_msgText[idx].c_str(), bubbleW, bubbleH, labelW, labelH);
 
+    // 历史同步可能一次显示近 100 条消息；每条消息只创建一个 LVGL label，
+    // 避免头像/容器/文本多对象叠加导致 LVGL 内存池耗尽。
+    if (mine) {
+        const int16_t bubbleX = 226 - bubbleW;
+        bubbleLabel(g_chatPanel,
+                    g_msgText[idx].c_str(),
+                    bubbleX,
+                    y,
+                    bubbleW,
+                    bubbleH,
+                    C_BUBBLE_RIGHT,
+                    C_TEXT);
+    } else {
+        bubbleLabel(g_chatPanel,
+                    g_msgText[idx].c_str(),
+                    6,
+                    y,
+                    bubbleW,
+                    bubbleH,
+                    C_BUBBLE_LEFT,
+                    C_WHITE);
+    }
+    return;
+
     const int16_t avatarSize = 22;
     const int16_t avatarY = y + (bubbleH - avatarSize) / 2;
 
+
+    //目前的显示效果中并没有"易" 和 "曦"，但是我觉得这个效果更好。空间更足
     if (mine) {
-        circleText(g_chatPanel, 202, avatarY, avatarSize, C_BUBBLE_RIGHT, "曦");
+        circleText(g_chatPanel, 202, avatarY, avatarSize, C_BUBBLE_RIGHT, "易");
 
         const int16_t bubbleX = 202 - 6 - bubbleW;
         lv_obj_t *bubble = box(g_chatPanel, bubbleX, y, bubbleW, bubbleH, C_BUBBLE_RIGHT, 8);
@@ -401,7 +651,7 @@ static void drawOneMessage(uint8_t idx, int16_t y)
         lv_label_set_long_mode(txt, LV_LABEL_LONG_WRAP);
         lv_obj_set_style_text_line_space(txt, MSG_LINE_SPACE, LV_PART_MAIN);
     } else {
-        circleText(g_chatPanel, 10, avatarY, avatarSize, C_AVATAR_PURPLE, "易");
+        circleText(g_chatPanel, 10, avatarY, avatarSize, C_AVATAR_PURPLE, "曦");
 
         lv_obj_t *bubble = box(g_chatPanel, 42, y, bubbleW, bubbleH, C_BUBBLE_LEFT, 8);
 
@@ -417,14 +667,35 @@ static void drawOneMessage(uint8_t idx, int16_t y)
 static void redrawChatMessages()
 {
     if (!g_chatPanel) return;
+    if (!ensureMessageStorage()) return;
 
     lv_obj_clean(g_chatPanel);
+    lv_obj_scroll_to_y(g_chatPanel, 0, LV_ANIM_OFF);
+
+    clampMessageView();
+    if (g_msgViewLast < 0) return;
+
+    const uint8_t last = (uint8_t)g_msgViewLast;
+    const uint8_t first = findWindowFirst(last);
+    const int32_t totalH = renderedWindowHeight(first, last);
 
     int16_t y = CHAT_TOP_PAD;
-    for (uint8_t i = 0; i < g_msgCount; i++) {
+    if (totalH < CHAT_PANEL_H) {
+        y = (int16_t)(CHAT_PANEL_H - totalH + CHAT_TOP_PAD);
+    }
+
+    for (uint8_t i = first; i <= last; i++) {
+        if (shouldShowTimeDividerInWindow(i, first)) {
+            drawTimeDivider(i, y);
+            y += TIME_LABEL_H + TIME_AFTER_GAP;
+        }
+
         int16_t h = bubbleHeightForText(g_msgText[i].c_str());
         drawOneMessage(i, y);
         y += h + CHAT_GAP;
+
+        if ((i & 0x03) == 0) yield();
+        if (i == last) break;
     }
 }
 
@@ -436,7 +707,7 @@ static void createTopBar()
     lv_obj_t *top = box(g_root, 0, 0, 240, 30, C_TOP_BAR, 0);
 
     lv_obj_t *avatar = box(top, 2, 2, 26, 26, C_WHITE, LV_RADIUS_CIRCLE);
-    centerLabel(avatar, "狗", FONT_CN, C_TEXT);
+    centerLabel(avatar, "猫", FONT_CN, C_TEXT);
 
     // 头像右侧放两行时间，不挤占右侧 mode / WiFi / 电池图标。
     g_dateLabel = label(top, "---- -- --", 34, 2, 78, 12,
@@ -588,9 +859,12 @@ void ui_chat_create()
     lv_obj_clear_flag(g_root, LV_OBJ_FLAG_SCROLLABLE);
 
     g_msgCount = 0;
-    for (uint8_t i = 0; i < CHAT_MAX; i++) {
-        g_msgText[i] = "";
-        g_msgMine[i] = false;
+    if (ensureMessageStorage()) {
+        for (uint8_t i = 0; i < CHAT_MAX; i++) {
+            g_msgText[i] = "";
+            g_msgMine[i] = false;
+            g_msgTs[i] = 0;
+        }
     }
 
     createTopBar();
@@ -796,25 +1070,74 @@ const char *ui_chat_getInputText()
     return lv_textarea_get_text(g_inputTa);
 }
 
-void ui_chat_addMessage(const char *text, bool mine)
+void ui_chat_beginMessageBatch()
+{
+    g_msgBatchMode = true;
+    g_msgBatchDirty = false;
+}
+
+void ui_chat_endMessageBatch(bool scrollToBottom)
+{
+    if (!g_msgBatchMode) return;
+
+    const bool dirty = g_msgBatchDirty;
+    g_msgBatchMode = false;
+    g_msgBatchDirty = false;
+
+    if (!dirty) return;
+
+    if (scrollToBottom) {
+        setMessageViewToBottom();
+    } else {
+        clampMessageView();
+    }
+
+    redrawChatMessages();
+    if (scrollToBottom && g_chatPanel) {
+        lv_obj_scroll_to_y(g_chatPanel, LV_COORD_MAX, LV_ANIM_OFF);
+    }
+}
+
+void ui_chat_addMessage(const char *text, bool mine, uint32_t ts)
 {
     if (text == nullptr || text[0] == '\0') return;
+    if (!ensureMessageStorage()) return;
+
+    const bool wasAutoFollow = g_msgAutoFollow;
 
     if (g_msgCount < CHAT_MAX) {
         g_msgText[g_msgCount] = text;
         g_msgMine[g_msgCount] = mine;
+        g_msgTs[g_msgCount] = ts;
         g_msgCount++;
     } else {
         for (uint8_t i = 1; i < CHAT_MAX; i++) {
             g_msgText[i - 1] = g_msgText[i];
             g_msgMine[i - 1] = g_msgMine[i];
+            g_msgTs[i - 1] = g_msgTs[i];
         }
         g_msgText[CHAT_MAX - 1] = text;
         g_msgMine[CHAT_MAX - 1] = mine;
+        g_msgTs[CHAT_MAX - 1] = ts;
+
+        if (!wasAutoFollow && g_msgViewLast > 0) {
+            g_msgViewLast--;
+        }
+    }
+
+    if (wasAutoFollow) {
+        setMessageViewToBottom();
+    } else {
+        clampMessageView();
+    }
+
+    if (g_msgBatchMode) {
+        g_msgBatchDirty = true;
+        return;
     }
 
     redrawChatMessages();
-    if (g_chatPanel) {
+    if (wasAutoFollow && g_chatPanel) {
         lv_obj_scroll_to_y(g_chatPanel, LV_COORD_MAX, LV_ANIM_OFF);
     }
 }
@@ -822,10 +1145,21 @@ void ui_chat_addMessage(const char *text, bool mine)
 void ui_chat_clearMessages()
 {
     g_msgCount = 0;
-    for (uint8_t i = 0; i < CHAT_MAX; i++) {
-        g_msgText[i] = "";
-        g_msgMine[i] = false;
+    setMessageViewToBottom();
+
+    if (ensureMessageStorage()) {
+        for (uint8_t i = 0; i < CHAT_MAX; i++) {
+            g_msgText[i] = "";
+            g_msgMine[i] = false;
+            g_msgTs[i] = 0;
+        }
     }
+
+    if (g_msgBatchMode) {
+        g_msgBatchDirty = true;
+        return;
+    }
+
     redrawChatMessages();
     if (g_chatPanel) {
         lv_obj_scroll_to_y(g_chatPanel, 0, LV_ANIM_OFF);
@@ -834,8 +1168,39 @@ void ui_chat_clearMessages()
 
 void ui_chat_scrollMessages(int8_t direction)
 {
-    if (!g_chatPanel || direction == 0) return;
+    if (!g_chatPanel || direction == 0 || g_msgCount == 0) return;
 
-    lv_coord_t dy = (direction < 0) ? CHAT_SCROLL_STEP : -CHAT_SCROLL_STEP;
-    lv_obj_scroll_by_bounded(g_chatPanel, 0, dy, LV_ANIM_ON);
+    if (scrollRenderedWindow(direction)) return;
+
+    clampMessageView();
+    if (g_msgViewLast < 0) return;
+
+    const uint8_t last = (uint8_t)g_msgViewLast;
+    const uint8_t first = findWindowFirst(last);
+
+    if (direction < 0) {
+        if (first == 0) return;
+        g_msgAutoFollow = false;
+        g_msgViewLast = (int16_t)(first - 1);
+    } else {
+        if (last >= g_msgCount - 1) {
+            setMessageViewToBottom();
+        } else {
+            uint8_t step = last - first + 1;
+            if (step == 0) step = 1;
+
+            uint16_t nextLast = (uint16_t)last + step;
+            if (nextLast >= g_msgCount - 1) {
+                setMessageViewToBottom();
+            } else {
+                g_msgAutoFollow = false;
+                g_msgViewLast = (int16_t)nextLast;
+            }
+        }
+    }
+
+    redrawChatMessages();
+    if (g_msgAutoFollow && g_chatPanel) {
+        lv_obj_scroll_to_y(g_chatPanel, LV_COORD_MAX, LV_ANIM_OFF);
+    }
 }

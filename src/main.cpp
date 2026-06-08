@@ -19,7 +19,11 @@ static WifiMqttManager net;
 
 static uint32_t lastMqttTryMs = 0;
 static uint32_t lastStatusUiMs = 0;
+static uint32_t lastHistorySyncTryMs = 0;
 static bool historySyncAttempted = false;
+static bool historyUiReplaceMode = false;
+static bool historyUiCleared = false;
+static constexpr uint32_t HISTORY_SYNC_RETRY_MS = 30000;
 
 static void refreshImeUi()
 {
@@ -78,8 +82,13 @@ static void onChatMessage(const ChatMessage &msg)
     // main.cpp 负责 UI、输入法、按键和通信层的衔接。
     // JSON 拼接、解析、去重都放在 WIFI_MQTT.cpp，
     // 避免网络协议细节进入小手机 UI 或九键输入法代码。
+    if (historyUiReplaceMode && !historyUiCleared) {
+        ui_chat_clearMessages();
+        historyUiCleared = true;
+    }
+
     bool mine = (msg.from == DEVICE_ID);
-    ui_chat_addMessage(msg.text.c_str(), mine);
+    ui_chat_addMessage(msg.text.c_str(), mine, msg.ts);
 }
 
 static void tryConnectMqtt()
@@ -96,13 +105,31 @@ static void tryConnectMqtt()
 
 static void syncHistoryOnceAfterWifi()
 {
-    // 开机后 WiFi 一旦连上，先同步历史，再让 loop 继续连接 MQTT。
-    // HTTP 同步失败也只记录日志，不阻塞小手机继续使用实时 MQTT。
+    // 开机后重建服务器最新 100 条消息窗口，后续再用 MQTT 增量更新。
     if (historySyncAttempted) return;
     if (!net.wifiConnected()) return;
 
-    historySyncAttempted = true;
-    net.syncHistory(net.lastLocalSeq(), 100);
+    uint32_t now = millis();
+    if (lastHistorySyncTryMs != 0 &&
+        now - lastHistorySyncTryMs < HISTORY_SYNC_RETRY_MS) {
+        return;
+    }
+    lastHistorySyncTryMs = now;
+
+    // Batch import avoids rebuilding all LVGL chat objects for every history item.
+    ui_chat_beginMessageBatch();
+    historyUiReplaceMode = true;
+    historyUiCleared = false;
+    bool synced = net.syncLatestHistory(100);
+    historyUiReplaceMode = false;
+    ui_chat_endMessageBatch(true);
+
+    if (synced) {
+        historySyncAttempted = true;
+    } else {
+        // Count the next retry from the end of a blocking HTTP attempt.
+        lastHistorySyncTryMs = millis();
+    }
 }
 
 static void sendCurrentText()

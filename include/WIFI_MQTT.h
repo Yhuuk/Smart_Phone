@@ -10,16 +10,19 @@
 // WiFi 和 MQTT Broker 需要和你的 Node.js 服务器环境保持一致。
 // MQTT_HOST 继续使用服务器 .env 中相同的 Broker；如果服务器换了 Broker，
 // ESP32 这里也必须一起改。
-static const char *WIFI_SSID = "北离";
-static const char *WIFI_PASS = "@Ww520527";
+//这里目前使用的是手机热点，由于路由器有隔离，导致局域网内没法ping通；但是手机热点测试一切正常。
+static const char *WIFI_SSID = "Q";
+static const char *WIFI_PASS = "12345678";
+// static const char *WIFI_SSID = "北离";
+// static const char *WIFI_PASS = "@Ww520527";
 static const char *MQTT_HOST = "broker.emqx.io";
 static const uint16_t MQTT_PORT = 1883;
 
 // DEVICE_ID 是“当前这台小手机”的设备名，用来判断消息是不是自己发的。
 // 例如第一台可以叫 phone_a，第二台可以叫 phone_b。
 // 服务器下行消息里的 from == DEVICE_ID 时，main.cpp 会显示右侧气泡。
-static const char *DEVICE_ID = "phone_a";
-// static const char *DEVICE_ID = "phone_b";
+// static const char *DEVICE_ID = "phone_a";
+static const char *DEVICE_ID = "phone_b";
 
 // ROOM_ID 是聊天室 ID。HTTP 历史同步和 MQTT topic 都围绕这个房间号工作。
 static const char *ROOM_ID = "room001";
@@ -35,7 +38,8 @@ static const char *MQTT_DOWN_TOPIC = "chat/room001/down";
 // 历史消息 HTTP 服务器地址，必须写电脑在局域网里的 IP，不能写 localhost。
 // 对 ESP32 来说 localhost 指 ESP32 自己，不是你的 Windows 电脑。
 // 如果换了电脑、路由器重新分配了 IP，后续只需要改这里。
-static const char *HTTP_SERVER_BASE = "http://192.168.1.10:3000";
+static const char *HTTP_SERVER_BASE = "http://10.32.7.85:3000";
+// static const char *HTTP_SERVER_BASE = "http://192.168.1.10:3000";
 
 // 保留旧名字，避免其它文件还引用 TOPIC_TX/TOPIC_RX 时失效。
 // 新协议下 TX=up，RX=down。
@@ -60,7 +64,7 @@ struct ChatMessage {
     // text 是真正显示到聊天气泡里的正文。
     String text;
 
-    // ts 是服务器时间戳，单位是秒。
+    // ts 是服务器时间戳，统一转换为 Unix 秒。
     uint32_t ts = 0;
 };
 
@@ -94,6 +98,7 @@ public:
 
     bool publishChat(const String& text);
     bool syncHistory(uint32_t sinceSeq, uint16_t limit = 100);
+    bool syncLatestHistory(uint16_t limit = 100);
 
     bool wifiConnected() const;
     bool mqttConnected();
@@ -143,6 +148,7 @@ private:
     bool _lastWifiConnected = false;
     bool _lastMqttConnected = false;
     bool _stateLoaded = false;
+    bool _historyRebuildMode = false;
 
     uint32_t _wifiConnectStartMs = 0;
     bool _wifiFailureLogged = false;

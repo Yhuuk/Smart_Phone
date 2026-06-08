@@ -33,6 +33,8 @@ void ui_chat_setImeCandidates(ImeCandidateRow row,
 void ui_chat_setInputText(const char *text, uint16_t cursorPos = 0);
 const char *ui_chat_getInputText();
 
-void ui_chat_addMessage(const char *text, bool mine);
+void ui_chat_beginMessageBatch();
+void ui_chat_endMessageBatch(bool scrollToBottom = true);
+void ui_chat_addMessage(const char *text, bool mine, uint32_t ts = 0);
 void ui_chat_clearMessages();
 void ui_chat_scrollMessages(int8_t direction);

@@ -3,6 +3,9 @@
 #include <ArduinoJson.h>
 #include <HTTPClient.h>
 #include <Preferences.h>
+#include <ctype.h>
+#include <stdlib.h>
+#include <time.h>
 
 WifiMqttManager *WifiMqttManager::s_instance = nullptr;
 
@@ -10,6 +13,136 @@ static const char *NET_NVS_NAMESPACE = "chatnet";
 static const char *NVS_MSG_COUNTER_KEY = "msgCounter";
 static const char *NVS_LAST_SEQ_KEY = "lastSeq";
 static const uint32_t WIFI_CONNECT_TIMEOUT_MS = 15000;
+static const uint32_t HTTP_TIMEOUT_MS = 2500;
+static const uint16_t HISTORY_PAGE_LIMIT = 20;
+
+static uint32_t normalizeEpochSeconds(uint64_t raw)
+{
+    if (raw == 0) return 0;
+
+    // 兼容毫秒时间戳。当前 Unix 秒约 17 亿，毫秒约 1.7 万亿。
+    if (raw > 20000000000ULL) {
+        raw /= 1000ULL;
+    }
+
+    if (raw > 0xFFFFFFFFULL) {
+        return 0;
+    }
+
+    return (uint32_t)raw;
+}
+
+static bool parseDateNumbers(const char *text, int values[6])
+{
+    if (!text || !values) return false;
+
+    uint8_t count = 0;
+    const char *p = text;
+    while (*p && count < 6) {
+        while (*p && !isdigit((unsigned char)*p)) {
+            p++;
+        }
+
+        if (!*p) break;
+
+        values[count++] = atoi(p);
+
+        while (*p && isdigit((unsigned char)*p)) {
+            p++;
+        }
+    }
+
+    return count >= 5;
+}
+
+static uint32_t parseTimestampString(const char *text)
+{
+    if (!text || text[0] == '\0') return 0;
+
+    bool allDigits = true;
+    for (const char *p = text; *p; p++) {
+        if (!isdigit((unsigned char)*p)) {
+            allDigits = false;
+            break;
+        }
+    }
+
+    if (allDigits) {
+        return normalizeEpochSeconds(strtoull(text, nullptr, 10));
+    }
+
+    int v[6] = {0, 0, 0, 0, 0, 0};
+    if (!parseDateNumbers(text, v)) return 0;
+
+    if (v[0] < 2000 || v[1] < 1 || v[1] > 12 || v[2] < 1 || v[2] > 31) {
+        return 0;
+    }
+
+    struct tm tmv;
+    memset(&tmv, 0, sizeof(tmv));
+    tmv.tm_year = v[0] - 1900;
+    tmv.tm_mon = v[1] - 1;
+    tmv.tm_mday = v[2];
+    tmv.tm_hour = v[3];
+    tmv.tm_min = v[4];
+    tmv.tm_sec = v[5];
+    tmv.tm_isdst = -1;
+
+    time_t epoch = mktime(&tmv);
+    if (epoch <= 0) return 0;
+    return (uint32_t)epoch;
+}
+
+static uint32_t readTimestamp(JsonVariantConst value)
+{
+    if (value.isNull()) return 0;
+
+    if (value.is<const char*>()) {
+        return parseTimestampString(value.as<const char*>());
+    }
+
+    return normalizeEpochSeconds(value.as<uint64_t>());
+}
+
+static bool httpGetJson(const String& url, JsonDocument& doc, const char *tag)
+{
+    Serial.print("[HTTP] GET ");
+    Serial.println(url);
+
+    HTTPClient http;
+    http.setTimeout(HTTP_TIMEOUT_MS);
+
+    if (!http.begin(url)) {
+        Serial.print("[HTTP] ");
+        Serial.print(tag);
+        Serial.println(" begin failed");
+        return false;
+    }
+
+    int code = http.GET();
+    Serial.print("[HTTP] ");
+    Serial.print(tag);
+    Serial.print(" code=");
+    Serial.println(code);
+
+    if (code != HTTP_CODE_OK) {
+        http.end();
+        return false;
+    }
+
+    DeserializationError err = deserializeJson(doc, http.getStream());
+    http.end();
+
+    if (err) {
+        Serial.print("[HTTP] ");
+        Serial.print(tag);
+        Serial.print(" parse error: ");
+        Serial.println(err.c_str());
+        return false;
+    }
+
+    return true;
+}
 
 static bool readChatMessageFromJson(JsonObjectConst obj, ChatMessage& msg)
 {
@@ -25,7 +158,7 @@ static bool readChatMessageFromJson(JsonObjectConst obj, ChatMessage& msg)
     msg.clientMsgId = obj["client_msg_id"] | "";
     msg.from = obj["from"] | "";
     msg.text = obj["text"] | "";
-    msg.ts = obj["ts"] | 0;
+    msg.ts = readTimestamp(obj["ts"]);
     msg.text.trim();
 
     return msg.seq > 0 && msg.text.length() > 0;
@@ -229,34 +362,8 @@ bool WifiMqttManager::syncHistory(uint32_t sinceSeq, uint16_t limit)
     url += "&limit=";
     url += String(limit);
 
-    Serial.print("[HTTP] GET ");
-    Serial.println(url);
-
-    HTTPClient http;
-    http.setTimeout(5000);
-
-    if (!http.begin(url)) {
-        Serial.println("[HTTP] begin failed");
-        return false;
-    }
-
-    int code = http.GET();
-    Serial.print("[HTTP] code=");
-    Serial.println(code);
-
-    if (code != HTTP_CODE_OK) {
-        http.end();
-        return false;
-    }
-
-    String payload = http.getString();
-    http.end();
-
     JsonDocument doc;
-    DeserializationError err = deserializeJson(doc, payload);
-    if (err) {
-        Serial.print("[HTTP] parse error: ");
-        Serial.println(err.c_str());
+    if (!httpGetJson(url, doc, "sync")) {
         return false;
     }
 
@@ -286,6 +393,127 @@ bool WifiMqttManager::syncHistory(uint32_t sinceSeq, uint16_t limit)
     }
 
     return true;
+}
+
+bool WifiMqttManager::syncLatestHistory(uint16_t limit)
+{
+    /*
+       重建“服务器最新 N 条”聊天窗口。
+       先用 /health 拿 latestSeq，再按小页请求 since 历史，避免一次解析 100 条
+       大 JSON 导致堆内存紧张或主循环长时间卡住。
+    */
+    if (!wifiConnected()) {
+        Serial.println("[HTTP] latest skipped, WiFi not connected");
+        return false;
+    }
+
+    if (limit == 0 || limit > 100) limit = 100;
+
+    Serial.print("[HTTP] latest limit=");
+    Serial.println(limit);
+
+    String healthUrl = String(HTTP_SERVER_BASE);
+    healthUrl += "/health";
+
+    JsonDocument healthDoc;
+    if (!httpGetJson(healthUrl, healthDoc, "latest meta")) {
+        return false;
+    }
+
+    const uint32_t latestSeq = healthDoc["latestSeq"] | 0;
+    if (latestSeq == 0) {
+        Serial.println("[HTTP] latest empty");
+        return true;
+    }
+
+    const uint32_t startSeq = (latestSeq > limit) ? (latestSeq - limit) : 0;
+
+    Serial.print("[HTTP] latestSeq=");
+    Serial.print(latestSeq);
+    Serial.print(" startSeq=");
+    Serial.println(startSeq);
+
+    const uint32_t oldLastSeq = _lastLocalSeq;
+    _lastLocalSeq = startSeq;
+    _historyRebuildMode = true;
+
+    bool ok = true;
+    uint16_t applied = 0;
+    uint32_t firstSeq = 0;
+    uint32_t lastSeq = 0;
+    uint32_t cursor = startSeq;
+
+    while (cursor < latestSeq && applied < limit) {
+        uint16_t pageLimit = limit - applied;
+        if (pageLimit > HISTORY_PAGE_LIMIT) pageLimit = HISTORY_PAGE_LIMIT;
+
+        String url = String(HTTP_SERVER_BASE);
+        url += "/api/messages?room=";
+        url += ROOM_ID;
+        url += "&since=";
+        url += String(cursor);
+        url += "&limit=";
+        url += String(pageLimit);
+
+        JsonDocument doc;
+        if (!httpGetJson(url, doc, "latest page")) {
+            ok = false;
+            break;
+        }
+
+        JsonArrayConst messages = doc["messages"].as<JsonArrayConst>();
+        if (messages.isNull()) {
+            Serial.println("[HTTP] latest page missing messages");
+            ok = false;
+            break;
+        }
+
+        if (messages.size() == 0) {
+            break;
+        }
+
+        uint32_t oldCursor = cursor;
+        for (JsonObjectConst item : messages) {
+            ChatMessage msg;
+            if (!readChatMessageFromJson(item, msg)) {
+                continue;
+            }
+
+            if (handleChatMessage(msg, true)) {
+                if (firstSeq == 0) firstSeq = msg.seq;
+                lastSeq = msg.seq;
+                applied++;
+            }
+
+            if (msg.seq > cursor) {
+                cursor = msg.seq;
+            }
+
+            if (applied >= limit || cursor >= latestSeq) {
+                break;
+            }
+        }
+
+        if (cursor == oldCursor) break;
+        yield();
+    }
+
+    _historyRebuildMode = false;
+
+    if (ok && applied > 0) {
+        saveLastLocalSeq();
+    } else {
+        _lastLocalSeq = oldLastSeq;
+    }
+
+    Serial.print("[HTTP] latest applied=");
+    Serial.print(applied);
+    Serial.print(" firstSeq=");
+    Serial.print(firstSeq);
+    Serial.print(" lastSeq=");
+    Serial.println(lastSeq);
+
+    return ok;
 }
 
 void WifiMqttManager::update()
@@ -452,7 +680,7 @@ bool WifiMqttManager::handleChatMessage(const ChatMessage& msg, bool fromHistory
         return false;
     }
 
-    if (msg.seq <= _lastLocalSeq) {
+    if (!_historyRebuildMode && msg.seq <= _lastLocalSeq) {
         Serial.print(source);
         Serial.print(" duplicate seq=");
         Serial.print(msg.seq);
@@ -467,7 +695,9 @@ bool WifiMqttManager::handleChatMessage(const ChatMessage& msg, bool fromHistory
 
     if (msg.seq > _lastLocalSeq) {
         _lastLocalSeq = msg.seq;
-        saveLastLocalSeq();
+        if (!_historyRebuildMode) {
+            saveLastLocalSeq();
+        }
     }
 
     return true;
@@ -522,6 +752,7 @@ void WifiMqttManager::loadPersistentState()
     _stateLoaded = true;
 }
 
+//本机保存服务器聊天室的消息seq
 void WifiMqttManager::saveLastLocalSeq()
 {
     Preferences prefs;
