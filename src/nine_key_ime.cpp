@@ -1,5 +1,6 @@
 #include "nine_key_ime.h"
 #include <ctype.h>  // 提供 tolower() 等字符处理函数
+#include <string.h>
 #include <Preferences.h>  //NVS管理的库
 
 // -------------------- 词库条目结构 --------------------
@@ -33,26 +34,26 @@ struct  ContextEntry{
 
 
 static const PinyinEntry KMainTable[] = {
-    {"a", "啊腌阿"},
+    {"a", "啊阿吖腌"},
     {"ai", "哀哎唉埃挨爱癌矮碍艾蔼隘"},
     {"an", "俺安岸庵按暗案氨鞍"},
     {"ang", "昂肮"},
-    {"ao", "傲凹奥懊拗澳熬袄"},
-    {"ba", "八叭吧坝巴扒把拔捌爸疤笆罢耙芭跋霸靶"},
+    {"ao", "嗷奥熬傲凹懊拗澳袄"},
+    {"ba", "吧八把爸巴拔罢坝扒叭捌疤笆耙芭跋霸靶"},
     {"bai", "伯拜掰摆柏白百败"},
     {"ban", "伴办半扮扳拌搬斑板版班瓣绊般颁"},
     {"bang", "傍帮梆棒榜磅绑膀蚌谤邦"},
-    {"bao", "保刨剥包堡宝报抱暴瀑炮爆胞苞薄褒豹雹饱"},
-    {"bei", "倍北卑备悲惫杯焙狈碑背臂被贝辈"},
+    {"bao", "包抱宝报保饱煲暴爆胞苞薄堡刨剥瀑炮褒豹雹"},
+    {"bei", "被呗北备背悲杯倍贝辈碑卑惫焙狈臂"},
     {"ben", "奔本笨"},
-    {"beng", "崩泵绷蹦"},
-    {"bi", "匕壁币庇弊彼必比毕毙泌璧痹碧秕秘笔荸蓖蔽辟逼避鄙闭鼻"},
+    {"beng", "甭崩泵绷蹦"},
+    {"bi", "比必笔逼币哔壁庇弊彼毕毙泌璧痹碧秕秘荸蓖蔽辟避鄙闭鼻"},
     {"bian", "便匾变扁编蝙贬辨辩辫边遍鞭"},
     {"biao", "彪标膘表"},
     {"bie", "别憋瘪鳖"},
     {"bin", "宾彬滨濒缤鬓"},
     {"bing", "丙兵冰屏并柄病禀秉饼"},
-    {"bo", "勃博卜拨搏播泊波渤玻簸脖膊舶菠跛驳"},
+    {"bo", "啵波播拨博勃卜搏泊渤玻簸脖膊舶菠跛驳"},
     {"bu", "不哺埠布怖捕步簿补部"},
     {"ca", "擦"},
     {"cai", "彩才材猜睬菜裁财踩采"},
@@ -69,7 +70,7 @@ static const PinyinEntry KMainTable[] = {
     {"che", "尺彻扯撤澈车"},
     {"chen", "尘忱晨沉称臣衬趁辰陈"},
     {"cheng", "乘呈城惩成承撑橙澄盛秤程诚逞铛"},
-    {"chi", "侈匙吃嗤弛持斥池痴翅耻赤迟驰齿"},
+    {"chi", "吃哧持迟池赤尺痴翅耻侈匙嗤弛斥驰齿"},
     {"chong", "充冲宠崇涌种虫重"},
     {"chou", "丑仇愁抽畴稠筹绸臭酬"},
     {"chu", "储出初厨处楚橱畜矗础触锄除雏"},
@@ -79,7 +80,7 @@ static const PinyinEntry KMainTable[] = {
     {"chui", "吹垂捶炊锤"},
     {"chun", "唇春椿淳纯蠢醇"},
     {"chuo", "戳"},
-    {"ci", "伺刺慈次此瓷磁祠词赐辞雌"},
+    {"ci", "此次词辞呲慈瓷磁祠刺赐伺雌"},
     {"cong", "丛从匆囱聪葱"},
     {"cou", "凑"},
     {"cu", "促卒簇粗醋"},
@@ -87,12 +88,13 @@ static const PinyinEntry KMainTable[] = {
     {"cui", "催崔悴摧粹翠脆"},
     {"cun", "存寸村"},
     {"cuo", "挫措搓撮锉错"},
-    {"da", "大打搭瘩答达"},
+    {"da", "大打搭答达哒瘩"},
     {"dai", "代呆带待怠戴歹袋逮"},
     {"dan", "丹但弹担掸旦氮淡石耽胆蛋诞"},
     {"dang", "党当挡档荡裆"},
     {"dao", "倒刀到叨导岛悼捣盗祷稻蹈道"},
-    {"de", "地得德的"},
+    {"de", "的得地德"},
+    {"dei", "得嘚"},
     {"deng", "凳灯登瞪等蹬邓"},
     {"di", "低嘀堤嫡帝底弟抵提敌涤滴笛第缔蒂递"},
     {"dian", "佃典垫奠店惦掂殿淀点玷电甸碘颠"},
@@ -100,15 +102,16 @@ static const PinyinEntry KMainTable[] = {
     {"die", "叠爹碟蝶谍跌"},
     {"ding", "丁叮定盯订钉锭顶鼎"},
     {"diu", "丢"},
-    {"dong", "东冬冻动懂栋洞董"},
+    {"dong", "动懂东咚冬冻栋洞董"},
     {"dou", "兜抖斗痘蚪读豆逗都陡"},
-    {"du", "堵妒度杜毒渡牍独督睹肚赌镀"},
+    {"du", "嘟堵度杜毒渡独读都督肚赌妒牍睹镀"},
     {"duan", "断段短端缎锻"},
-    {"dui", "兑堆对队"},
+    {"dui", "对怼队堆兑"},
     {"dun", "吨囤墩敦盹盾蹲钝顿"},
-    {"duo", "哆垛堕多夺惰朵舵跺踱躲驮"},
-    {"e", "俄噩恶愕扼蛾讹遏额饿鳄鹅"},
-    {"en", "恩"},
+    {"duo", "多躲朵夺剁哆垛堕惰舵跺踱驮"},
+    {"e", "呃饿恶额俄噩愕扼蛾讹遏鳄鹅"},
+    {"ei", "诶欸"},
+    {"en", "嗯恩"},
     {"er", "二儿尔而耳贰饵"},
     {"fa", "乏伐发法筏罚阀"},
     {"fan", "凡反帆樊泛烦犯番矾繁翻范贩返饭"},
@@ -119,12 +122,12 @@ static const PinyinEntry KMainTable[] = {
     {"fo", "佛"},
     {"fou", "否"},
     {"fu", "付伏俘俯傅凫副咐复夫妇孵富幅府扶抚拂敷斧服浮父甫福符缚肤脯腐腹芙蝠袱覆负赋赴辅辐附麸"},
-    {"ga", "咖夹"},
+    {"ga", "嘎尬咖夹"},
     {"gai", "丐改概溉盖芥该钙"},
-    {"gan", "干感敢杆柑橄甘秆竿肝赶"},
+    {"gan", "干感敢赶尴淦杆甘肝柑橄秆竿"},
     {"gang", "冈刚岗扛杠港纲缸肛钢"},
-    {"gao", "告搞稿篙糕羔膏镐高"},
-    {"ge", "个割各合哥戈搁格歌疙胳葛蛤阁隔革鸽"},
+    {"gao", "高搞告稿糕膏羔篙镐"},
+    {"ge", "个哥各歌格嗝割合戈搁疙胳葛蛤阁隔革鸽"},
     {"gei", "给"},
     {"gen", "根跟"},
     {"geng", "埂更梗羹耕耿颈"},
@@ -134,15 +137,15 @@ static const PinyinEntry KMainTable[] = {
     {"gua", "刮卦寡挂瓜褂"},
     {"guai", "乖怪拐"},
     {"guan", "关冠官惯棺灌管罐观贯馆"},
-    {"guang", "光广逛"},
+    {"guang", "光广逛咣"},
     {"gui", "刽归柜桂瑰硅规诡贵跪轨闺鬼龟"},
     {"gun", "棍滚"},
     {"guo", "国果涡裹过郭锅"},
     {"ha", "哈"},
-    {"hai", "亥咳孩害海还骇"},
-    {"han", "函含喊寒悍憨憾捍撼旱汉汗涵焊罕翰酣韩"},
+    {"hai", "嗨还海孩害亥咳骇"},
+    {"han", "喊汉寒含韩汗涵悍憨函旱焊罕翰酣捍撼憾"},
     {"hang", "吭夯巷杭航行"},
-    {"hao", "号嚎壕好毫浩耗蒿豪"},
+    {"hao", "好号薅浩豪耗毫嚎壕蒿"},
     {"he", "何吓呵和喝核河盒禾荷褐贺赫鹤"},
     {"hei", "嘿黑"},
     {"hen", "很恨狠痕"},
@@ -155,28 +158,28 @@ static const PinyinEntry KMainTable[] = {
     {"huan", "唤宦幻患换欢涣焕环痪缓"},
     {"huang", "凰幌恍惶慌晃煌皇磺荒蝗谎黄"},
     {"hui", "会回徽恢悔惠慧挥晦毁汇溃灰秽绘茴蛔讳诲贿辉"},
-    {"hun", "婚昏浑混荤魂"},
-    {"huo", "伙惑或活火祸获豁货霍"},
+    {"hun", "婚昏馄浑混荤魂"},
+    {"huo", "嚯火活或伙惑祸获豁货霍"},
     {"ji", "冀几击剂即及叽吉唧圾基奇妓嫉季寂寄己忌急技挤既期机极棘济激畸疾祭积稽箕籍系级纪继绩肌脊荠计讥记辑迹际集饥鲫鸡"},
-    {"jia", "价佳假加嘉嫁家架枷甲稼茄荚钾颊驾"},
+    {"jia", "家加假价佳伽嘉嫁架枷甲稼茄荚钾颊驾"},
     {"jian", "件俭健兼减剑剪坚奸尖建拣捡柬检歼涧渐溅煎监碱简箭肩舰艰茧荐见贱践鉴键间"},
     {"jiang", "僵匠奖姜将强桨江浆疆缰蒋讲酱降"},
     {"jiao", "交侥剿叫嚼娇搅教校椒浇焦狡矫礁窖绞缴胶脚蕉觉角轿较郊酵饺骄"},
     {"jie", "介借劫姐届戒截捷接揭杰楷洁界皆秸竭结节街解诫阶"},
     {"jin", "仅今劲尽巾斤晋津浸禁筋紧襟谨近进金锦"},
     {"jing", "井京兢净境径惊敬景晶睛竞竟精经茎荆警镜阱靖静鲸"},
-    {"jiong", "窘"},
+    {"jiong", "囧窘"},
     {"jiu", "久九就揪救旧灸玖疚究纠臼舅酒韭鸠"},
     {"ju", "举俱具剧局居巨惧拒拘据橘沮炬矩聚菊距锯鞠驹"},
     {"juan", "倦卷圈捐眷绢鹃"},
     {"jue", "倔决掘爵绝诀"},
     {"jun", "俊军君均峻竣菌钧骏"},
-    {"ka", "卡"},
+    {"ka", "咔卡"},
     {"kai", "凯开慨揩"},
     {"kan", "刊勘坎堪看砍"},
     {"kang", "康慷抗炕糠"},
     {"kao", "拷烤考铐靠"},
-    {"ke", "克刻可坷壳客棵渴磕科苛蝌课颗"},
+    {"ke", "可嗑克刻客课科颗壳棵渴磕坷苛蝌"},
     {"ken", "啃垦恳肯裉"},
     {"keng", "坑"},
     {"kong", "孔恐控空"},
@@ -185,7 +188,7 @@ static const PinyinEntry KMainTable[] = {
     {"kua", "垮夸挎胯跨"},
     {"kuai", "块快筷"},
     {"kuan", "宽款"},
-    {"kuang", "况旷框狂眶矿筐"},
+    {"kuang", "狂哐况旷框眶矿筐"},
     {"kui", "亏傀愧盔窥葵魁"},
     {"kun", "困坤捆昆"},
     {"kuo", "廓扩括阔"},
@@ -194,7 +197,7 @@ static const PinyinEntry KMainTable[] = {
     {"lan", "兰懒拦揽栏榄滥澜烂篮缆蓝览"},
     {"lang", "廊朗榔浪狼琅郎"},
     {"lao", "劳唠姥捞涝烙牢络老酪"},
-    {"le", "乐了勒"},
+    {"le", "了嘞乐勒"},
     {"lei", "儡垒擂泪类累肋蕾雷"},
     {"leng", "冷棱楞"},
     {"li", "丽例俐利力励历厉厘吏哩李栗梨沥漓犁狸理璃痢砾礼离立篱粒荔莉里隶雳鲤黎"},
@@ -208,25 +211,26 @@ static const PinyinEntry KMainTable[] = {
     {"liu", "六刘柳榴流溜琉留瘤硫碌陆馏"},
     {"long", "咙垄弄拢窿笼聋胧隆龙"},
     {"lou", "娄搂楼漏篓陋露"},
-    {"lu", "卢卤庐录炉绿芦虏赂路颅鲁鹿"},
+    {"lo", "咯"},
+    {"lu", "路噜撸录鹿鲁炉庐绿芦卢卤虏颅赂"},
     {"luan", "乱卵峦"},
     {"lun", "仑伦抡沦论轮"},
     {"luo", "啰洛箩罗萝螺裸逻锣骆骡"},
     {"lv", "侣吕屡履律旅氯滤率缕虑铝驴"},
     {"lve", "掠略"},
-    {"ma", "吗妈抹摩玛码蚂蟆马骂麻"},
+    {"ma", "吗嘛妈马骂麻抹摩玛码蚂蟆"},
     {"mai", "买卖埋脉迈麦"},
     {"man", "幔慢曼满漫瞒蔓蛮馒"},
     {"mang", "忙氓盲芒茫莽"},
     {"mao", "冒帽毛猫矛茂茅貌贸铆锚"},
     {"me", "么"},
-    {"mei", "妹媒媚昧枚梅楣每没煤玫眉糜美霉"},
+    {"mei", "没美每妹梅莓媒媚昧枚楣煤玫眉糜霉"},
     {"men", "们门闷"},
-    {"meng", "孟朦梦檬猛盟萌蒙锰"},
+    {"meng", "梦懵蒙萌猛盟孟朦檬锰"},
     {"mi", "咪密弥眯米蜜觅谜迷靡"},
     {"mian", "免冕勉娩棉眠绵缅面"},
-    {"miao", "妙庙描渺瞄秒苗藐"},
-    {"mie", "灭蔑"},
+    {"miao", "喵秒苗妙庙描渺瞄藐"},
+    {"mie", "咩灭蔑"},
     {"min", "悯敏民皿闽"},
     {"ming", "名命明螟铭鸣"},
     {"miu", "谬"},
@@ -236,13 +240,13 @@ static const PinyinEntry KMainTable[] = {
     {"na", "南呐哪娜拿捺纳那钠"},
     {"nai", "乃奈奶耐"},
     {"nan", "男难"},
-    {"nang", "囊"},
+    {"nang", "囔囊"},
     {"nao", "恼挠脑闹"},
     {"ne", "呢"},
     {"nei", "内馁"},
     {"nen", "嫩"},
     {"neng", "能"},
-    {"ni", "你匿尼拟昵泥溺腻逆"},
+    {"ni", "你呢尼泥拟昵腻逆匿溺"},
     {"nian", "年念捻撵碾粘蔫"},
     {"niang", "娘酿"},
     {"niao", "尿鸟"},
@@ -256,15 +260,16 @@ static const PinyinEntry KMainTable[] = {
     {"nuo", "懦挪糯诺"},
     {"nv", "女"},
     {"nve", "疟虐"},
-    {"ou", "偶区呕欧殴藕鸥"},
-    {"pa", "帕怕爬趴"},
+    {"o", "哦噢喔"},
+    {"ou", "偶呕欧藕区殴鸥"},
+    {"pa", "怕啪爬趴帕"},
     {"pai", "徘拍排派湃牌迫"},
     {"pan", "判叛攀潘畔盘盼胖"},
     {"pang", "乓庞旁螃"},
     {"pao", "咆抛泡袍跑"},
     {"pei", "佩培沛胚赔配陪"},
     {"pen", "喷盆"},
-    {"peng", "彭捧朋棚澎烹砰硼碰篷膨蓬鹏"},
+    {"peng", "碰朋捧鹏嘭棚彭澎烹砰硼篷膨蓬"},
     {"pi", "僻劈匹啤坯屁批披疲皮脾譬霹"},
     {"pian", "偏片篇翩骗"},
     {"piao", "朴漂瓢票飘"},
@@ -273,8 +278,8 @@ static const PinyinEntry KMainTable[] = {
     {"ping", "乒凭坪平瓶苹萍评"},
     {"po", "坡婆泼破颇魄"},
     {"pou", "剖"},
-    {"pu", "仆圃扑普浦菩葡蒲谱铺"},
-    {"qi", "七乞企其凄启嘁器契妻岂崎弃戚旗柒栖棋欺歧气汽泣漆畦砌祈脐起迄骑鳍齐"},
+    {"pu", "普扑噗铺谱浦蒲葡菩圃仆"},
+    {"qi", "起气七其期器淇骑棋齐启妻欺奇旗汽泣漆祈脐企乞凄嘁契岂崎弃戚柒栖歧畦砌迄鳍"},
     {"qia", "恰掐洽"},
     {"qian", "前千嵌欠歉浅潜牵签纤谦谴迁遣钱钳铅黔"},
     {"qiang", "呛墙抢枪腔"},
@@ -283,7 +288,7 @@ static const PinyinEntry KMainTable[] = {
     {"qin", "亲侵勤寝擒琴禽秦芹钦"},
     {"qing", "倾卿庆情擎晴氢清蜻请轻青顷"},
     {"qiong", "琼穷"},
-    {"qiu", "丘囚求球秋蚯"},
+    {"qiu", "求球秋糗丘囚蚯"},
     {"qu", "去取娶屈岖曲渠蛆趋趣躯驱"},
     {"quan", "全券劝拳权泉犬痊"},
     {"que", "却瘸确缺鹊"},
@@ -319,7 +324,7 @@ static const PinyinEntry KMainTable[] = {
     {"shei", "谁"},
     {"shen", "什伸呻婶审慎沈深渗甚申神绅肾身"},
     {"sheng", "剩升圣声牲生甥省笙绳胜"},
-    {"shi", "世事似使侍势十史嗜士失始实室尸屎市师式恃拭施时是柿殖氏湿狮矢示虱蚀视誓识试诗适逝释食饰驶"},
+    {"shi", "是时事十使世市师试识实室史士失始视诗式食驶适释似侍势嗜尸屎柿殖氏湿狮矢示虱蚀誓饰逝施恃拭"},
     {"shou", "兽受售守寿手授收熟瘦首"},
     {"shu", "书叔墅属庶恕抒数暑曙术束枢树梳殊淑漱疏秫竖署舒蔬薯蜀赎输述黍鼠"},
     {"shua", "刷耍"},
@@ -329,9 +334,9 @@ static const PinyinEntry KMainTable[] = {
     {"shui", "水睡税说"},
     {"shun", "吮瞬顺"},
     {"shuo", "烁硕"},
-    {"si", "丝司嘶四寺思撕斯死私肆饲"},
-    {"song", "宋松耸讼诵送颂"},
-    {"sou", "嗽搜艘"},
+    {"si", "四思司丝私斯死寺撕肆饲蛳嘶"},
+    {"song", "送怂松宋耸讼诵颂"},
+    {"sou", "搜嗖艘嗽"},
     {"su", "俗塑宿溯粟素缩肃苏诉速酥"},
     {"suan", "算蒜酸"},
     {"sui", "岁碎祟穗虽遂随隧髓"},
@@ -344,7 +349,7 @@ static const PinyinEntry KMainTable[] = {
     {"tao", "套掏桃涛淘滔萄讨逃陶"},
     {"te", "特"},
     {"teng", "疼腾藤誊"},
-    {"ti", "体剃剔啼屉惕替梯涕踢蹄题"},
+    {"ti", "题提体踢嚏替梯涕剃剔啼屉惕蹄"},
     {"tian", "填天恬添甜田舔"},
     {"tiao", "挑条笤跳"},
     {"tie", "帖贴铁"},
@@ -354,18 +359,18 @@ static const PinyinEntry KMainTable[] = {
     {"tu", "兔凸吐图土屠徒涂秃突途"},
     {"tuan", "团"},
     {"tui", "推腿蜕退颓"},
-    {"tun", "吞屯臀"},
+    {"tun", "吞饨屯臀"},
     {"tuo", "唾妥托拖椭脱驼鸵"},
-    {"wa", "娃挖洼瓦蛙袜"},
+    {"wa", "哇娃挖洼瓦蛙袜"},
     {"wai", "外歪"},
     {"wan", "丸婉完宛弯惋挽晚湾玩碗腕豌顽"},
     {"wang", "亡妄往忘旺望枉汪王网"},
     {"wei", "为伟伪位偎卫危味唯喂围委威尉尾巍微慰未桅猬畏纬维胃苇萎蔚薇谓违魏"},
     {"wen", "吻文温瘟稳紊纹蚊问闻"},
     {"weng", "嗡瓮翁"},
-    {"wo", "卧我握沃窝蜗"},
+    {"wo", "我握窝卧沃蜗"},
     {"wu", "乌五伍侮务勿午吴呜坞屋巫悟捂晤梧武污物舞芜蜈诬误雾鹉"},
-    {"xi", "习吸喜夕媳嬉希席息悉惜戏昔晰析洗溪熄熙牺犀稀细膝蟋袭西铣锡隙曦"},
+    {"xi", "喜嘻西系习吸戏媳嬉希席息悉惜昔晰析洗溪熄熙牺犀稀细膝蟋袭铣锡隙曦"},
     {"xia", "下侠匣夏峡暇狭瞎虾辖霞"},
     {"xian", "仙先县咸嫌宪弦掀显涎献现线羡腺舷衔贤锨闲限险陷馅鲜"},
     {"xiang", "乡享像厢向响想橡湘相祥箱翔详象镶项香"},
@@ -374,32 +379,32 @@ static const PinyinEntry KMainTable[] = {
     {"xin", "信心新欣芯薪衅辛锌"},
     {"xing", "兴刑型姓幸形性星杏猩腥邢醒"},
     {"xiong", "兄凶匈汹熊胸雄"},
-    {"xiu", "休修嗅朽秀绣羞袖锈"},
-    {"xu", "叙吁婿序徐恤旭絮绪续蓄虚许酗需须"},
+    {"xiu", "休修咻秀嗅朽绣羞袖锈"},
+    {"xu", "嘘需许虚续徐序叙旭绪絮须蓄婿恤吁酗"},
     {"xuan", "喧宣悬旋漩炫玄癣轩选"},
     {"xue", "学穴薛雪靴"},
     {"xun", "勋寻巡循旬殉汛熏训讯询迅逊驯"},
-    {"ya", "亚压呀哑崖押涯牙芽蚜衙讶轧雅鸦鸭"},
+    {"ya", "呀亚压雅鸭牙哑押芽崖涯蚜衙讶轧鸦"},
     {"yan", "严厌咽唁堰奄宴岩延掩檐殷沿淹演炎烟焰燕盐眼研砚艳蜒衍言谚阎雁颜验"},
     {"yang", "仰养央扬杨样殃氧洋漾痒秧羊阳鸯"},
     {"yao", "吆咬夭妖姚摇窑约耀肴腰舀药要谣遥邀钥"},
     {"ye", "业也冶夜掖椰液爷腋谒野页"},
-    {"yi", "一义乙亦亿以仪伊依倚医壹夷奕姨宜屹已异役忆意抑揖易椅毅溢疑疫益移绎翼肄胰艺蚁衣议译谊逸遗邑"},
+    {"yi", "一以已意咦义亿依易衣医姨宜异忆议译移艺疑亦乙仪伊倚壹夷奕屹役抑揖椅毅溢疫益绎翼肄胰蚁谊逸遗邑"},
     {"yin", "印吟因姻引淫瘾茵蚓银阴隐音饮"},
-    {"ying", "婴应影映樱盈硬缨英荧莹莺萤营蝇赢迎颖鹦鹰"},
+    {"ying", "应影英赢硬嘤映迎营莹婴樱盈缨荧莺萤蝇颖鹦鹰"},
     {"yo", "哟"},
     {"yong", "佣勇咏庸拥永泳用蛹踊"},
-    {"you", "优佑又友右尤幼幽忧悠有油游犹由诱邮"},
-    {"yu", "与予于余喻域娱宇寓屿御愈愉愚榆欲浴淤渔狱玉羽育舆芋裕誉语豫迂逾遇郁隅雨预鱼"},
+    {"you", "有又友优游油邮呦柚幼幽忧悠由右尤诱佑犹"},
+    {"yu", "与于语雨鱼玉余遇瑜预欲愉娱域宇寓御愈愚榆浴淤渔狱羽育舆芋裕誉豫迂逾郁隅予喻屿"},
     {"yuan", "元冤原员园圆怨愿援渊源猿缘袁辕远院鸳"},
     {"yue", "岳悦月粤越跃阅"},
     {"yun", "云允匀孕晕蕴运酝陨韵"},
-    {"za", "扎杂砸"},
-    {"zai", "仔再在宰栽灾载"},
+    {"za", "咋杂砸扎"},
+    {"zai", "在再崽载仔宰栽灾"},
     {"zan", "咱暂赞"},
     {"zang", "脏葬赃"},
     {"zao", "凿噪早枣澡灶燥皂糟藻蚤躁造遭"},
-    {"ze", "则择泽责"},
+    {"ze", "啧则择泽责"},
     {"zei", "贼"},
     {"zen", "怎"},
     {"zeng", "增憎综赠"},
@@ -422,7 +427,8 @@ static const PinyinEntry KMainTable[] = {
     {"zhun", "准谆"},
     {"zhuo", "卓啄拙捉桌浊灼琢茁酌"},
     {"zi", "咨姊姿子字滋滓籽紫自资"},
-    {"zong", "宗总棕纵踪"},
+    {"zhuai", "拽"},
+    {"zong", "总粽宗棕纵踪"},
     {"zou", "奏揍走"},
     {"zu", "族祖租组诅足阻"},
     {"zuan", "钻"},
@@ -945,10 +951,35 @@ static const char* englishLettersForKey(char key){
     }
 }
 
-//空格符直接电脑键盘打出空格就是空格符号了
-static const char* commonSymbolsForkey()
+struct PinyinPriorityEntry {
+    const char* py;
+    int16_t bonus;
+};
+
+static int16_t pinyinFrequencyBonus(const char* py)
 {
-    return  "-/(),.!?:;\"' ~&%$#@'";   //"符号需要\"来
+    static const PinyinPriorityEntry table[] = {
+        {"shi", 240}, {"de", 230}, {"hao", 220}, {"ni", 210}, {"wo", 210},
+        {"ma", 190}, {"han", 180}, {"en", 175}, {"o", 170}, {"you", 165},
+        {"yi", 160}, {"a", 150}, {"wa", 145}, {"ya", 145}, {"ba", 140},
+        {"gao", 135}, {"gan", 100}, {"za", 95}, {"ei", 90}, {"lo", 85},
+    };
+
+    for (size_t i = 0; i < sizeof(table) / sizeof(table[0]); i++) {
+        if (strcmp(py, table[i].py) == 0) return table[i].bonus;
+    }
+
+    return 0;
+}
+
+static const char* chineseSymbolsForKey()
+{
+    return "，|。|？|！|、|：|；|“|”|‘|’|（|）|《|》|……|——|·|【|】|「|」|『|』|～|￥";
+}
+
+static const char* englishSymbolsForKey()
+{
+    return ",|.|?|!|:|;|\"|'|(|)|-|_|@|#|/|\\|&|%|$|~";
 }
 
 // 初始化输入法
@@ -1163,11 +1194,8 @@ void NineKeyIME::handleChineseKey(char key) {
         _digits = "1";
         _cnStage = CN_STAGE_HZ;
 
-        const char* symbols = commonSymbolsForkey();
-        for (uint8_t i = 0; symbols[i] != '\0'; i++) {
-            char one[2] = {symbols[i], '\0'};
-            addCandidate("sym", one);
-        }
+        addPhraseCandidatesFromGroup("sym", chineseSymbolsForKey(), 1200);
+        sortHanziCandidates();
 
         _hzSel = 0;
         return;
@@ -1271,12 +1299,10 @@ void NineKeyIME::handleEnglishKey(char key) {
         clearComposition();
         _digits = "1";          //_digits是一个
 
-        const char* symbols = commonSymbolsForkey();
+        _cnStage = CN_STAGE_HZ;
 
-        for(uint8_t i = 0; symbols[i] != '\0'; i++){
-                    char one[2] = {symbols[i],'\0'};
-                    addCandidate("sym",one);  //sym是放进拼音数组，但是符号有单独的数组，所以不需要再把拼音转换成数字进行匹配
-        }
+        addPhraseCandidatesFromGroup("sym", englishSymbolsForKey(), 1200);
+        sortHanziCandidates();
 
         _hzSel = 0;
         return;
@@ -1580,7 +1606,8 @@ void NineKeyIME::rebuildCandidates() {
         String code = pinyinToDigits(KMainTable[i].py);
         if (code == _digits) {
             hasExact = true;
-            addPyCandidate(KMainTable[i].py, static_cast<int16_t>(2200 - (i % 200)));
+            addPyCandidate(KMainTable[i].py,
+                           static_cast<int16_t>(2200 + pinyinFrequencyBonus(KMainTable[i].py) - (i % 200)));
         }
     }
 
@@ -1588,7 +1615,8 @@ void NineKeyIME::rebuildCandidates() {
         String code = pinyinToDigits(KAliasTable[i].py);
         if (code == _digits) {
             hasExact = true;
-            addPyCandidate(KAliasTable[i].py, static_cast<int16_t>(1800 - (i % 200)));
+            addPyCandidate(KAliasTable[i].py,
+                           static_cast<int16_t>(1800 + pinyinFrequencyBonus(KAliasTable[i].py) / 2 - (i % 200)));
         }
     }
 
@@ -1605,7 +1633,8 @@ void NineKeyIME::rebuildCandidates() {
             String code = pinyinToDigits(KMainTable[i].py);
             if (code.startsWith(_digits)) {
                 int16_t remain = static_cast<int16_t>(code.length() - _digits.length());
-                addPyCandidate(KMainTable[i].py, static_cast<int16_t>(1000 - remain * 12 - (i % 80)));
+                addPyCandidate(KMainTable[i].py,
+                               static_cast<int16_t>(1000 + pinyinFrequencyBonus(KMainTable[i].py) / 4 - remain * 12 - (i % 80)));
             }
         }
 
@@ -1613,7 +1642,8 @@ void NineKeyIME::rebuildCandidates() {
             String code = pinyinToDigits(KAliasTable[i].py);
             if (code.startsWith(_digits)) {
                 int16_t remain = static_cast<int16_t>(code.length() - _digits.length());
-                addPyCandidate(KAliasTable[i].py, static_cast<int16_t>(800 - remain * 10 - (i % 80)));
+                addPyCandidate(KAliasTable[i].py,
+                               static_cast<int16_t>(800 + pinyinFrequencyBonus(KAliasTable[i].py) / 5 - remain * 10 - (i % 80)));
             }
         }
     }

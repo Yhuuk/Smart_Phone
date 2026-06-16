@@ -707,7 +707,7 @@ static void createTopBar()
     lv_obj_t *top = box(g_root, 0, 0, 240, 30, C_TOP_BAR, 0);
 
     lv_obj_t *avatar = box(top, 2, 2, 26, 26, C_WHITE, LV_RADIUS_CIRCLE);
-    centerLabel(avatar, "猫", FONT_CN, C_TEXT);
+    centerLabel(avatar, "易", FONT_CN, C_TEXT);
 
     // 头像右侧放两行时间，不挤占右侧 mode / WiFi / 电池图标。
     g_dateLabel = label(top, "---- -- --", 34, 2, 78, 12,
