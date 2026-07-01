@@ -95,7 +95,7 @@ public:
 private:
     // 当前候选列表最多缓存多少个候选项
     // 不是词库总量，而是一次查找后内部最多存多少候选
-    static const uint8_t MAX_HZ_CAND = 48;
+    static const uint8_t MAX_HZ_CAND = 56;
     static const uint8_t MAX_PY_CAND = 8;
     static const uint8_t MAX_USER_FREQ = 48;
 

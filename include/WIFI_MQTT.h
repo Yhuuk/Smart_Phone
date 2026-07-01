@@ -15,8 +15,13 @@ static const char *WIFI_SSID = "Oy";
 static const char *WIFI_PASS = "XX20030202";
 // static const char *WIFI_SSID = "Cx";
 // static const char *WIFI_PASS = "GG20020409";
+
 static const char *MQTT_HOST = "broker.emqx.io";
 static const uint16_t MQTT_PORT = 1883;
+
+//这个是云服务自搭建的 mqtt 服务端口
+// static const char *MQTT_HOST = "116.62.32.186";
+// static const uint16_t MQTT_PORT = 1883;
 
 // DEVICE_ID 是“当前这台小手机”的设备名，用来判断消息是不是自己发的。
 // 例如第一台可以叫 phone_a，第二台可以叫 phone_b。
