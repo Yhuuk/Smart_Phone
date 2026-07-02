@@ -79,6 +79,7 @@ class WifiMqttManager {
 public:
     using MessageCallback = void (*)(const char *topic, const String &payload);
     using StateCallback   = void (*)(const bool connected);
+    using CommandCallback = void (*)(const String &payload);
 
     WifiMqttManager();
 
@@ -87,7 +88,11 @@ public:
                const char *host,
                uint16_t port,
                const char *topicTx,
-               const char *topicRx);
+               const char *topicRx,
+               const char *cmdTopic = nullptr,
+               const char *deviceId = DEVICE_ID,
+               const char *roomId = ROOM_ID,
+               const char *httpServerBase = HTTP_SERVER_BASE);
 
     void update();
 
@@ -114,6 +119,7 @@ public:
 
     void onMessage(MessageCallback cb);
     void setChatMessageCallback(ChatMessageCallback cb);
+    void setCommandCallback(CommandCallback cb);
     void onWifiStateChange(StateCallback cb);
     void onMqttStateChange(StateCallback cb);
 
@@ -137,14 +143,18 @@ private:
     WiFiClient   _wifiClient;
     PubSubClient _mqtt;
 
-    const char *_ssid    = nullptr;
-    const char *_pass    = nullptr;
-    const char *_host    = nullptr;
-    uint16_t    _port    = 1883;
-    const char *_topicTx = nullptr;
-    const char *_topicRx = nullptr;
+    // 运行时配置来自 app_config。这里复制成 String，避免 NVS 重新加载后指针失效。
+    String _ssid;
+    String _pass;
+    String _host;
+    uint16_t _port = 1883;
+    String _topicTx;
+    String _topicRx;
+    String _cmdTopic;
 
     String _deviceId;
+    String _roomId;
+    String _httpServerBase;
     String _chipSuffix;
 
     uint32_t _msgCounter = 0;
@@ -160,6 +170,7 @@ private:
 
     MessageCallback _msgCb  = nullptr;
     ChatMessageCallback _chatCb = nullptr;
+    CommandCallback _cmdCb = nullptr;
     StateCallback   _wifiCb = nullptr;
     StateCallback   _mqttCb = nullptr;
 };
