@@ -175,30 +175,37 @@ void WifiMqttManager::begin(const char *ssid,
                             const char *host,
                             uint16_t port,
                             const char *topicTx,
-                            const char *topicRx)
+                            const char *topicRx,
+                            const char *cmdTopic,
+                            const char *deviceId,
+                            const char *roomId,
+                            const char *httpServerBase)
 {
-    _ssid    = ssid;
-    _pass    = pass;
-    _host    = host;
+    _ssid    = ssid ? ssid : "";
+    _pass    = pass ? pass : "";
+    _host    = host ? host : "";
     _port    = port;
-    _topicTx = topicTx;
-    _topicRx = topicRx;
+    _topicTx = topicTx ? topicTx : "";
+    _topicRx = topicRx ? topicRx : "";
+    _cmdTopic = cmdTopic ? cmdTopic : "";
 
-    _deviceId = DEVICE_ID;
+    _deviceId = (deviceId && deviceId[0] != '\0') ? deviceId : DEVICE_ID;
+    _roomId = (roomId && roomId[0] != '\0') ? roomId : ROOM_ID;
+    _httpServerBase = (httpServerBase && httpServerBase[0] != '\0') ? httpServerBase : HTTP_SERVER_BASE;
     initChipSuffix();
     loadPersistentState();
 
-    _mqtt.setServer(_host, _port);
+    _mqtt.setServer(_host.c_str(), _port);
     _mqtt.setCallback(WifiMqttManager::mqttCallbackRouter);
 
     // PubSubClient 默认包长偏小。聊天 JSON 里可能包含中文 UTF-8，
     // 提前把 MQTT 缓冲区放大，避免稍长消息被截断或 publish 失败。
-    _mqtt.setBufferSize(1024);
+    _mqtt.setBufferSize(2048);
 }
 
 void WifiMqttManager::startWifi()
 {
-    if (_ssid == nullptr || _ssid[0] == '\0') {
+    if (_ssid.length() == 0) {
         Serial.println("[WIFI] failed");
         return;
     }
@@ -209,7 +216,7 @@ void WifiMqttManager::startWifi()
 
     WiFi.mode(WIFI_STA);
     WiFi.setSleep(false);
-    WiFi.begin(_ssid, _pass);
+    WiFi.begin(_ssid.c_str(), _pass.c_str());
 }
 
 void WifiMqttManager::restartWifi()
@@ -243,7 +250,7 @@ bool WifiMqttManager::connectMqtt()
 
     Serial.println("[MQTT] connected");
 
-    if (!_mqtt.subscribe(_topicRx)) {
+    if (!_mqtt.subscribe(_topicRx.c_str())) {
         Serial.print("[MQTT] subscribe failed: ");
         Serial.println(_topicRx);
         _mqtt.disconnect();
@@ -256,6 +263,17 @@ bool WifiMqttManager::connectMqtt()
 
     Serial.print("[MQTT] subscribed: ");
     Serial.println(_topicRx);
+
+    // 控制 topic 只负责 OTA/配置命令。订阅失败不会影响聊天主链路。
+    if (_cmdTopic.length() > 0) {
+        if (_mqtt.subscribe(_cmdTopic.c_str())) {
+            Serial.print("[MQTT] command subscribed: ");
+            Serial.println(_cmdTopic);
+        } else {
+            Serial.print("[MQTT] command subscribe failed: ");
+            Serial.println(_cmdTopic);
+        }
+    }
 
     // 这里不要再往 up topic 发布 “ESP32 connected” 之类上线消息。
     // 新服务器把 up topic 当作聊天入口，只接受 room/from/client_msg_id/text JSON。
@@ -284,7 +302,7 @@ bool WifiMqttManager::publish(const char *payload)
         return false;
     }
 
-    bool ok = _mqtt.publish(_topicTx, payload);
+    bool ok = _mqtt.publish(_topicTx.c_str(), payload);
     if (!ok) {
         Serial.println("[MQTT] publish failed");
     }
@@ -314,7 +332,7 @@ bool WifiMqttManager::publishChat(const String& text)
     String clientMsgId = nextClientMsgId();
 
     JsonDocument doc;
-    doc["room"] = ROOM_ID;
+    doc["room"] = _roomId;
     doc["from"] = _deviceId;
     doc["client_msg_id"] = clientMsgId;
     doc["text"] = cleanText;
@@ -325,7 +343,7 @@ bool WifiMqttManager::publishChat(const String& text)
     Serial.print("[MQTT TX] ");
     Serial.println(payload);
 
-    bool ok = _mqtt.publish(_topicTx, payload.c_str());
+    bool ok = _mqtt.publish(_topicTx.c_str(), payload.c_str());
     if (!ok) {
         Serial.println("[MQTT] publish failed");
     }
@@ -354,9 +372,9 @@ bool WifiMqttManager::syncHistory(uint32_t sinceSeq, uint16_t limit)
     Serial.print("[HTTP] sync since=");
     Serial.println(sinceSeq);
 
-    String url = String(HTTP_SERVER_BASE);
+    String url = _httpServerBase;
     url += "/api/messages?room=";
-    url += ROOM_ID;
+    url += _roomId;
     url += "&since=";
     url += String(sinceSeq);
     url += "&limit=";
@@ -412,7 +430,7 @@ bool WifiMqttManager::syncLatestHistory(uint16_t limit)
     Serial.print("[HTTP] latest limit=");
     Serial.println(limit);
 
-    String healthUrl = String(HTTP_SERVER_BASE);
+    String healthUrl = _httpServerBase;
     healthUrl += "/health";
 
     JsonDocument healthDoc;
@@ -447,9 +465,9 @@ bool WifiMqttManager::syncLatestHistory(uint16_t limit)
         uint16_t pageLimit = limit - applied;
         if (pageLimit > HISTORY_PAGE_LIMIT) pageLimit = HISTORY_PAGE_LIMIT;
 
-        String url = String(HTTP_SERVER_BASE);
+        String url = _httpServerBase;
         url += "/api/messages?room=";
-        url += ROOM_ID;
+        url += _roomId;
         url += "&since=";
         url += String(cursor);
         url += "&limit=";
@@ -579,6 +597,11 @@ void WifiMqttManager::setChatMessageCallback(ChatMessageCallback cb)
     _chatCb = cb;
 }
 
+void WifiMqttManager::setCommandCallback(CommandCallback cb)
+{
+    _cmdCb = cb;
+}
+
 void WifiMqttManager::onWifiStateChange(StateCallback cb)
 {
     _wifiCb = cb;
@@ -624,7 +647,14 @@ void WifiMqttManager::handleMqttMessage(char *topic, byte *payload, unsigned int
         _msgCb(topic, msg);
     }
 
-    if (_topicRx == nullptr || strcmp(topic, _topicRx) != 0) {
+    if (_cmdTopic.length() > 0 && strcmp(topic, _cmdTopic.c_str()) == 0) {
+        if (_cmdCb) {
+            _cmdCb(msg);
+        }
+        return;
+    }
+
+    if (_topicRx.length() == 0 || strcmp(topic, _topicRx.c_str()) != 0) {
         return;
     }
 
@@ -668,7 +698,7 @@ bool WifiMqttManager::handleChatMessage(const ChatMessage& msg, bool fromHistory
     */
     const char *source = fromHistory ? "[HTTP]" : "[MQTT]";
 
-    if (msg.room != ROOM_ID) {
+    if (msg.room != _roomId) {
         return false;
     }
 
@@ -712,7 +742,7 @@ String WifiMqttManager::nextClientMsgId()
        如果设备短时间内重启再发送，ID 就可能和旧消息撞车。
 
        当前规则：
-       DEVICE_ID + "_" + ESP32 芯片 ID 后 8 位 HEX + "_" + NVS 递增计数
+       device_id + "_" + ESP32 芯片 ID 后 8 位 HEX + "_" + NVS 递增计数
 
        msgCounter 保存在 Preferences/NVS 中。每次发送前先 ++，并立刻写回 NVS，
        这样即使 ESP32 断电重启，下一条消息也会继续递增，不会回到 1。

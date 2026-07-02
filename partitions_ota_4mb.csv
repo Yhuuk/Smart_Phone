@@ -1,0 +1,11 @@
+# ESP32 4MB flash OTA partition table.
+# app0/app1 are both 0x1F0000 bytes, leaving as much room as possible for the
+# current LVGL/font firmware while still supporting rollback-style OTA updates.
+# 0x5000 = 20KB, 0x2000 = 8KB, 0x1F0000 = 2031616 bytes.
+# Keep this file ASCII-only. PlatformIO may parse this CSV with the Windows
+# default codec, and non-ASCII comments can break the build.
+# Name,     Type, SubType, Offset,   Size,     Flags
+nvs,        data, nvs,     0x9000,   0x5000,
+otadata,    data, ota,     0xe000,   0x2000,
+app0,       app,  ota_0,   0x10000,  0x1F0000,
+app1,       app,  ota_1,   0x200000, 0x1F0000,
